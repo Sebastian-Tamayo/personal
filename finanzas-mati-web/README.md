@@ -31,8 +31,8 @@ npm run preview
 ## Reglas de negocio
 
 - Gastos compartidos por defecto: Internet 40, Luz 75, Comida 200, Gasolina 100, Matías 100, Alquiler 480
-- Ahorro individual: 500 por persona (no es gasto compartido)
-- Aporte de cada uno: `(suma compartidos / 2) + 500`
+- **Ahorro individual (opcional):** por defecto 500 € c/u; se puede apagar o editar el monto por mes
+- Aporte: `compartido ÷ 2` si el ahorro está apagado; `(compartido ÷ 2) + ahorro` si está activo
 - Estado del mes: `Pagado` / `Pendiente`
 
 ## Archivos clave

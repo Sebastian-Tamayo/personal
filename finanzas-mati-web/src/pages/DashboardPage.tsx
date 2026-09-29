@@ -1,8 +1,8 @@
-import { CheckCircle2, CircleDollarSign, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { CheckCircle2, CircleDollarSign, Pencil, PiggyBank, Plus, Trash2, X } from 'lucide-react'
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { AppShell } from '../components/AppShell'
 import {
-  SAVINGS_PER_PERSON,
+  DEFAULT_SAVINGS_PER_PERSON,
   contributionPerPerson,
   currentMonthId,
   formatMoney,
@@ -38,18 +38,30 @@ export function DashboardPage() {
   const updateExpense = useFinanceStore((s) => s.updateExpense)
   const deleteExpense = useFinanceStore((s) => s.deleteExpense)
   const setMonthStatus = useFinanceStore((s) => s.setMonthStatus)
+  const setSavingsSettings = useFinanceStore((s) => s.setSavingsSettings)
 
   const [name, setName] = useState('')
   const [amount, setAmount] = useState('')
   const [editing, setEditing] = useState<Expense | null>(null)
   const [busy, setBusy] = useState(false)
+  const [savingsDraft, setSavingsDraft] = useState(String(DEFAULT_SAVINGS_PER_PERSON))
 
   useEffect(() => {
     return subscribe(user.uid)
   }, [subscribe, user.uid])
 
+  const includeSavings = month?.includeSavings ?? true
+  const savingsAmount = month?.savingsAmount ?? DEFAULT_SAVINGS_PER_PERSON
+
+  useEffect(() => {
+    setSavingsDraft(String(savingsAmount))
+  }, [savingsAmount, monthId])
+
   const shared = useMemo(() => sharedTotal(expenses), [expenses])
-  const contribution = useMemo(() => contributionPerPerson(expenses), [expenses])
+  const contribution = useMemo(
+    () => contributionPerPerson(expenses, { includeSavings, savingsAmount }),
+    [expenses, includeSavings, savingsAmount],
+  )
   const status: MonthStatus = month?.status ?? 'pendiente'
   const months = useMemo(() => monthOptions(8), [])
 
@@ -83,6 +95,31 @@ export function DashboardPage() {
     setName('')
     setAmount('')
   }
+
+  async function onToggleSavings() {
+    const next = !includeSavings
+    await setSavingsSettings(
+      {
+        includeSavings: next,
+        savingsAmount: next ? savingsAmount || DEFAULT_SAVINGS_PER_PERSON : savingsAmount,
+      },
+      user.uid,
+    )
+  }
+
+  async function onSavingsAmountCommit() {
+    const parsed = Number(savingsDraft.replace(',', '.'))
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      setSavingsDraft(String(savingsAmount))
+      return
+    }
+    if (parsed === savingsAmount) return
+    await setSavingsSettings({ includeSavings, savingsAmount: parsed }, user.uid)
+  }
+
+  const aporteHint = includeSavings
+    ? `(compartido ÷ 2) + ${savingsAmount}`
+    : 'compartido ÷ 2 (sin ahorro)'
 
   return (
     <AppShell title="Panel compartido · Sebas & Lore">
@@ -136,13 +173,72 @@ export function DashboardPage() {
           </div>
         </div>
 
+        <div className="rounded-xl border border-[var(--line)] bg-white/55 px-3 py-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="flex items-center gap-1.5 text-sm font-semibold text-[var(--ink)]">
+                <PiggyBank className="size-4 text-[var(--accent)]" aria-hidden />
+                Incluir ahorro individual
+              </p>
+              <p className="mt-0.5 text-xs text-[var(--ink-soft)]">
+                Opcional. Si está apagado, el aporte es solo la mitad de lo compartido.
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={includeSavings}
+              aria-label="Incluir ahorro individual"
+              onClick={() => void onToggleSavings()}
+              className={`relative h-8 w-14 shrink-0 rounded-full transition ${
+                includeSavings ? 'bg-[var(--accent)]' : 'bg-black/20'
+              }`}
+            >
+              <span
+                className={`absolute top-1 left-1 size-6 rounded-full bg-white shadow transition ${
+                  includeSavings ? 'translate-x-6' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
+
+          {includeSavings ? (
+            <label className="mt-3 flex flex-col gap-1 text-sm">
+              <span className="font-medium text-[var(--ink-soft)]">Monto ahorro c/u (€)</span>
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                value={savingsDraft}
+                onChange={(e) => setSavingsDraft(e.target.value)}
+                onBlur={() => void onSavingsAmountCommit()}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    void onSavingsAmountCommit()
+                  }
+                }}
+                className="max-w-[10rem] rounded-xl border border-[var(--line)] bg-white/90 px-3 py-2 outline-none ring-[var(--accent)] focus:ring-2"
+              />
+            </label>
+          ) : null}
+        </div>
+
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <Stat label="Total compartido" value={formatMoney(shared)} />
-          <Stat label="Ahorro c/u" value={formatMoney(SAVINGS_PER_PERSON)} hint="No es gasto compartido" />
+          <Stat
+            label={includeSavings ? 'Ahorro c/u (activo)' : 'Ahorro c/u (apagado)'}
+            value={includeSavings ? formatMoney(savingsAmount) : formatMoney(0)}
+            hint={
+              includeSavings
+                ? 'Se suma al aporte de cada uno'
+                : 'No se incluye este mes'
+            }
+          />
           <Stat
             label="Aporte de cada uno"
             value={formatMoney(contribution)}
-            hint={`(compartido ÷ 2) + ${SAVINGS_PER_PERSON}`}
+            hint={aporteHint}
             emphasize
           />
         </div>

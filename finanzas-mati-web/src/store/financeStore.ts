@@ -15,9 +15,11 @@ import {
 } from 'firebase/firestore'
 import { create } from 'zustand'
 import {
+  DEFAULT_SAVINGS_PER_PERSON,
   DEFAULT_SHARED_EXPENSES,
   contributionPerPerson,
   currentMonthId,
+  parseMonthRecord,
   sharedTotal,
   type Expense,
   type MonthRecord,
@@ -39,12 +41,46 @@ interface FinanceState {
   updateExpense: (id: string, name: string, amount: number) => Promise<void>
   deleteExpense: (id: string) => Promise<void>
   setMonthStatus: (status: MonthStatus, uid: string) => Promise<void>
-  totals: () => { shared: number; contribution: number }
+  setSavingsSettings: (
+    opts: { includeSavings: boolean; savingsAmount: number },
+    uid: string,
+  ) => Promise<void>
+  totals: () => { shared: number; contribution: number; includeSavings: boolean; savingsAmount: number }
 }
 
 let expensesUnsub: Unsubscribe | null = null
 let monthUnsub: Unsubscribe | null = null
 let seedingInFlight = false
+
+function defaultMonth(id: string, uid = ''): MonthRecord {
+  return {
+    id,
+    status: 'pendiente',
+    includeSavings: true,
+    savingsAmount: DEFAULT_SAVINGS_PER_PERSON,
+    updatedAt: Date.now(),
+    updatedBy: uid,
+  }
+}
+
+function bindMonthSnapshot(monthId: string, set: (partial: Partial<FinanceState>) => void) {
+  if (monthUnsub) {
+    monthUnsub()
+    monthUnsub = null
+  }
+  const db = getDb()
+  monthUnsub = onSnapshot(
+    doc(db, 'months', monthId),
+    (snap) => {
+      if (!snap.exists()) {
+        set({ month: defaultMonth(monthId) })
+        return
+      }
+      set({ month: parseMonthRecord(snap.id, snap.data() as Record<string, unknown>) })
+    },
+    (err) => set({ syncError: err.message }),
+  )
+}
 
 async function seedDefaultsIfEmpty(uid: string): Promise<void> {
   if (seedingInFlight) return
@@ -66,12 +102,13 @@ async function seedDefaultsIfEmpty(uid: string): Promise<void> {
         createdBy: uid,
       })
     }
-    // Mes actual pendiente por defecto
     const monthRef = doc(db, 'months', currentMonthId())
     batch.set(
       monthRef,
       {
         status: 'pendiente',
+        includeSavings: true,
+        savingsAmount: DEFAULT_SAVINGS_PER_PERSON,
         updatedAt: now,
         updatedBy: uid,
       },
@@ -94,43 +131,23 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
 
   totals: () => {
     const expenses = get().expenses
+    const month = get().month
+    const includeSavings = month?.includeSavings ?? true
+    const savingsAmount = month?.savingsAmount ?? DEFAULT_SAVINGS_PER_PERSON
     return {
       shared: sharedTotal(expenses),
-      contribution: contributionPerPerson(expenses),
+      contribution: contributionPerPerson(expenses, { includeSavings, savingsAmount }),
+      includeSavings,
+      savingsAmount,
     }
   },
 
   setMonthId: (monthId) => {
-    set({ monthId })
-    // Re-subscribe month doc only — caller should re-call subscribe or we handle below
-    if (monthUnsub) {
-      monthUnsub()
-      monthUnsub = null
-    }
-    const db = getDb()
-    monthUnsub = onSnapshot(
-      doc(db, 'months', monthId),
-      (snap) => {
-        if (!snap.exists()) {
-          set({ month: null })
-          return
-        }
-        const data = snap.data()
-        set({
-          month: {
-            id: snap.id,
-            status: (data.status as MonthStatus) || 'pendiente',
-            updatedAt: Number(data.updatedAt) || Date.now(),
-            updatedBy: String(data.updatedBy || ''),
-          },
-        })
-      },
-      (err) => set({ syncError: err.message }),
-    )
+    set({ monthId, month: defaultMonth(monthId) })
+    bindMonthSnapshot(monthId, set)
   },
 
   subscribe: (uid: string) => {
-    // cleanup previous
     expensesUnsub?.()
     monthUnsub?.()
     set({ loading: true, syncError: null, hydrated: false })
@@ -169,25 +186,7 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       (err) => set({ syncError: err.message, loading: false }),
     )
 
-    monthUnsub = onSnapshot(
-      doc(db, 'months', monthId),
-      (snap) => {
-        if (!snap.exists()) {
-          set({ month: null })
-          return
-        }
-        const data = snap.data()
-        set({
-          month: {
-            id: snap.id,
-            status: (data.status as MonthStatus) || 'pendiente',
-            updatedAt: Number(data.updatedAt) || Date.now(),
-            updatedBy: String(data.updatedBy || ''),
-          },
-        })
-      },
-      (err) => set({ syncError: err.message }),
-    )
+    bindMonthSnapshot(monthId, set)
 
     return () => {
       expensesUnsub?.()
@@ -218,7 +217,6 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
         createdBy: uid,
         _server: serverTimestamp(),
       })
-      // Replace temp id if snapshot hasn't landed yet
       set((s) => ({
         expenses: s.expenses.map((e) => (e.id === tempId ? { ...e, id: ref.id } : e)),
       }))
@@ -274,9 +272,40 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const monthId = get().monthId
     const prev = get().month
     const now = Date.now()
+    const base = prev ?? defaultMonth(monthId, uid)
+    const next: MonthRecord = { ...base, status, updatedAt: now, updatedBy: uid }
+    set({ month: next, syncError: null })
+    try {
+      await setDoc(
+        doc(getDb(), 'months', monthId),
+        {
+          status,
+          includeSavings: next.includeSavings,
+          savingsAmount: next.savingsAmount,
+          updatedAt: now,
+          updatedBy: uid,
+        },
+        { merge: true },
+      )
+    } catch (err) {
+      set({
+        month: prev,
+        syncError: err instanceof Error ? err.message : 'No se pudo actualizar el mes',
+      })
+      throw err
+    }
+  },
+
+  setSavingsSettings: async ({ includeSavings, savingsAmount }, uid) => {
+    const monthId = get().monthId
+    const prev = get().month
+    const now = Date.now()
+    const amount = Number.isFinite(savingsAmount) && savingsAmount >= 0 ? savingsAmount : DEFAULT_SAVINGS_PER_PERSON
+    const base = prev ?? defaultMonth(monthId, uid)
     const next: MonthRecord = {
-      id: monthId,
-      status,
+      ...base,
+      includeSavings,
+      savingsAmount: amount,
       updatedAt: now,
       updatedBy: uid,
     }
@@ -284,13 +313,19 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     try {
       await setDoc(
         doc(getDb(), 'months', monthId),
-        { status, updatedAt: now, updatedBy: uid },
+        {
+          status: next.status,
+          includeSavings,
+          savingsAmount: amount,
+          updatedAt: now,
+          updatedBy: uid,
+        },
         { merge: true },
       )
     } catch (err) {
       set({
         month: prev,
-        syncError: err instanceof Error ? err.message : 'No se pudo actualizar el mes',
+        syncError: err instanceof Error ? err.message : 'No se pudo guardar el ahorro',
       })
       throw err
     }
