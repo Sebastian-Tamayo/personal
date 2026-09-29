@@ -5,6 +5,7 @@ import { defineConfig } from 'vite'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss()],
-  // Use '/' for Cloudflare Pages / Netlify. For GitHub Pages project sites, set base: '/REPO_NAME/'
-  base: '/',
+  // GitHub Pages project site: https://Sebastian-Tamayo.github.io/personal/
+  // For Cloudflare/Netlify at domain root, change to base: '/'
+  base: '/personal/',
 })
