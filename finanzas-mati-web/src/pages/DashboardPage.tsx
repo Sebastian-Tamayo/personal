@@ -173,36 +173,30 @@ export function DashboardPage() {
           </div>
         </div>
 
-        <div className="rounded-xl border border-[var(--line)] bg-white/55 px-3 py-3">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="flex items-center gap-1.5 text-sm font-semibold text-[var(--ink)]">
-                <PiggyBank className="size-4 text-[var(--accent)]" aria-hidden />
-                Incluir ahorro individual
-              </p>
-              <p className="mt-0.5 text-xs text-[var(--ink-soft)]">
-                Opcional. Si está apagado, el aporte es solo la mitad de lo compartido.
-              </p>
+        {includeSavings ? (
+          <div className="rounded-xl border border-[var(--line)] bg-white/55 px-3 py-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="flex items-center gap-1.5 text-sm font-semibold text-[var(--ink)]">
+                  <PiggyBank className="size-4 text-[var(--accent)]" aria-hidden />
+                  Incluir ahorro individual
+                </p>
+                <p className="mt-0.5 text-xs text-[var(--ink-soft)]">
+                  Se suma al aporte de cada uno. No es un gasto compartido.
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={true}
+                aria-label="Quitar ahorro individual"
+                onClick={() => void onToggleSavings()}
+                className="relative h-8 w-14 shrink-0 rounded-full bg-[var(--accent)] transition"
+              >
+                <span className="absolute top-1 left-1 size-6 translate-x-6 rounded-full bg-white shadow transition" />
+              </button>
             </div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={includeSavings}
-              aria-label="Incluir ahorro individual"
-              onClick={() => void onToggleSavings()}
-              className={`relative h-8 w-14 shrink-0 rounded-full transition ${
-                includeSavings ? 'bg-[var(--accent)]' : 'bg-black/20'
-              }`}
-            >
-              <span
-                className={`absolute top-1 left-1 size-6 rounded-full bg-white shadow transition ${
-                  includeSavings ? 'translate-x-6' : 'translate-x-0'
-                }`}
-              />
-            </button>
-          </div>
 
-          {includeSavings ? (
             <label className="mt-3 flex flex-col gap-1 text-sm">
               <span className="font-medium text-[var(--ink-soft)]">Monto ahorro c/u (€)</span>
               <input
@@ -221,20 +215,29 @@ export function DashboardPage() {
                 className="max-w-[10rem] rounded-xl border border-[var(--line)] bg-white/90 px-3 py-2 outline-none ring-[var(--accent)] focus:ring-2"
               />
             </label>
-          ) : null}
-        </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => void onToggleSavings()}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-[var(--line)] bg-white/40 px-3 py-2.5 text-sm font-medium text-[var(--ink-soft)] transition hover:bg-white/70 hover:text-[var(--ink)]"
+          >
+            <PiggyBank className="size-4" aria-hidden />
+            Añadir ahorro individual
+          </button>
+        )}
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div
+          className={`grid grid-cols-1 gap-3 ${includeSavings ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}
+        >
           <Stat label="Total compartido" value={formatMoney(shared)} />
-          <Stat
-            label={includeSavings ? 'Ahorro c/u (activo)' : 'Ahorro c/u (apagado)'}
-            value={includeSavings ? formatMoney(savingsAmount) : formatMoney(0)}
-            hint={
-              includeSavings
-                ? 'Se suma al aporte de cada uno'
-                : 'No se incluye este mes'
-            }
-          />
+          {includeSavings ? (
+            <Stat
+              label="Ahorro c/u"
+              value={formatMoney(savingsAmount)}
+              hint="Se suma al aporte de cada uno"
+            />
+          ) : null}
           <Stat
             label="Aporte de cada uno"
             value={formatMoney(contribution)}
