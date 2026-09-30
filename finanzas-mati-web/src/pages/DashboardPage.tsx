@@ -1,6 +1,8 @@
 import { CheckCircle2, CircleDollarSign, Pencil, PiggyBank, Plus, Trash2, X } from 'lucide-react'
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { AppShell } from '../components/AppShell'
+import { InstallHint } from '../components/InstallHint'
+import { TasksSection } from '../components/TasksSection'
 import {
   DEFAULT_SAVINGS_PER_PERSON,
   contributionPerPerson,
@@ -334,6 +336,10 @@ export function DashboardPage() {
           </ul>
         )}
       </section>
+
+      <TasksSection />
+
+      <InstallHint />
 
       <p className="animate-rise-delay-2 text-center text-xs text-[var(--ink-soft)]">
         Los totales se actualizan al instante; Firestore solo sincroniza en segundo plano.
