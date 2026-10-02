@@ -1,20 +1,17 @@
-# Closed-app mobile Web Push for Familia Hellen y Mati Agenda (citas/compromisos) — NOT email,
-# NOT tareas diarias (chores). Fires ~every 15 min; per-profile leadMinutes + assignee targeting.
-# Timezone: Europe/Madrid (CEST/CET). Catch-up sends until event if primary window was missed.
-#
-# Required repo secrets (Settings → Secrets and variables → Actions):
-#   FIREBASE_SERVICE_ACCOUNT_JSON  — full JSON of a Firebase Admin SDK service account
-#   VAPID_PUBLIC_KEY               — same public key as VITE_VAPID_PUBLIC_KEY in the client build
-#   VAPID_PRIVATE_KEY              — matching private key (never in the client or docs)
-# Optional:
-#   VAPID_SUBJECT                  — e.g. mailto:you@example.com
+# Closed-app mobile Web Push for Familia Hellen y Mati Agenda.
+# Timezone: Europe/Madrid. Catch-up until event if primary window missed.
 name: Familia agenda push reminders
 
 on:
   schedule:
-    # Explicit quarters — more reliable than */15 on GitHub-hosted runners
-    - cron: '0,15,30,45 * * * *'
+    # Every 15 minutes — GitHub may delay a few minutes
+    - cron: '*/15 * * * *'
   workflow_dispatch:
+  repository_dispatch:
+    types: [familia-agenda-remind]
+
+permissions:
+  contents: read
 
 jobs:
   remind:
@@ -23,6 +20,11 @@ jobs:
       run:
         working-directory: familia-mati
     steps:
+      - name: Cron heartbeat
+        run: |
+          echo "event=${{ github.event_name }}"
+          echo "utc=$(date -u -Iseconds)"
+          echo "madrid=$(TZ=Europe/Madrid date -Iseconds)"
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
