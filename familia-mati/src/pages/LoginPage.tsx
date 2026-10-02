@@ -56,7 +56,7 @@ export function LoginPage() {
     {
       id: 'sebas',
       label: 'Sebas',
-      emoji: '🔵',
+      emoji: '💙',
       hint: 'Su propio correo',
       color: '#0369a1',
       soft: '#bae6fd',
@@ -72,7 +72,7 @@ export function LoginPage() {
     {
       id: 'hellen',
       label: 'Hellen',
-      emoji: '🟣',
+      emoji: '💜',
       hint: 'Correo de Hellen (Oppo) · teodoroalvis31@gmail.com',
       color: '#6d28d9',
       soft: '#ddd6fe',
@@ -80,7 +80,7 @@ export function LoginPage() {
     {
       id: 'lore_hellen',
       label: 'Lore+He',
-      emoji: '🩷🟣',
+      emoji: '🩷💜',
       hint: 'Legacy: 2 perfiles en correo de Lore',
       color: '#9d174d',
       soft: '#fce7f3',

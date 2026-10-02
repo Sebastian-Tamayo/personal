@@ -23,7 +23,7 @@ export const FAMILY_MEMBERS: FamilyMember[] = [
     role: 'adulto',
     color: '#0369a1',
     colorSoft: '#bae6fd',
-    emoji: '🔵',
+    emoji: '💙',
     canLogin: true,
   },
   {
@@ -43,7 +43,7 @@ export const FAMILY_MEMBERS: FamilyMember[] = [
     role: 'hijo',
     color: '#6d28d9',
     colorSoft: '#ddd6fe',
-    emoji: '🟣',
+    emoji: '💜',
     canLogin: true,
   },
   {
