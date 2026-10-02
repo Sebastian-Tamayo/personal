@@ -12,7 +12,7 @@
  * Optional:
  *   VAPID_SUBJECT=mailto:you@example.com
  *   REMINDER_TZ=Europe/Madrid
- *   REMINDER_WINDOW_MINUTES=20
+ *   REMINDER_WINDOW_MINUTES=45   — primary window after remindAt; catch-up continues until event
  *   VAPID_KEYS_FILE=/path/to/secrets/vapid.json  (local fallback)
  */
 import { readFileSync, existsSync } from 'node:fs'
@@ -68,7 +68,7 @@ function loadServiceAccount() {
   throw new Error('Missing FIREBASE_SERVICE_ACCOUNT_JSON (Firebase Admin service account)')
 }
 
-/** Interpret YYYY-MM-DD + HH:MM as local wall time in tz, return UTC ms. */
+/** Interpret YYYY-MM-DD + HH:MM as local wall time in tz, return UTC ms (minute precision). */
 function eventUtcMs(dateStr, timeStr, timeZone) {
   const [y, m, d] = dateStr.split('-').map(Number)
   const [hh, mm] = timeStr.split(':').map(Number)
@@ -103,14 +103,26 @@ function eventUtcMs(dateStr, timeStr, timeZone) {
     if (a.hh !== b.hh) return a.hh - b.hh
     return a.mm - b.mm
   }
+  let best = null
   while (lo <= hi) {
     const mid = Math.floor((lo + hi) / 2)
     const c = cmp(parts(mid), target)
-    if (c === 0) return mid
+    if (c === 0) {
+      best = mid
+      // Prefer earliest ms in the matching minute
+      hi = mid - 1
+      continue
+    }
     if (c < 0) lo = mid + 1
     else hi = mid - 1
   }
-  return Date.UTC(y, m - 1, d, hh, mm, 0)
+  if (best != null) return best
+  // Last resort: probe from a UTC guess shifted for CET/CEST (±0..3h)
+  for (const offsetH of [0, 1, 2, -1, 3]) {
+    const guess = Date.UTC(y, m - 1, d, hh, mm, 0) - offsetH * 3600 * 1000
+    if (cmp(parts(guess), target) === 0) return guess
+  }
+  throw new Error(`Cannot resolve ${dateStr} ${timeStr} in ${timeZone}`)
 }
 
 const HOUSEHOLD = new Set(['sebas', 'lore', 'hellen'])
@@ -131,7 +143,6 @@ function normalizeAssignee(raw) {
  * Privacy: only matching people get the push.
  * - todos → every subscribed household member (sebas/lore/hellen)
  * - sebas|lore|hellen → only that memberKey (never the others)
- * Legacy push docs with memberKey teo match hellen assignees.
  */
 function recipientsForItem(item, subs) {
   const who = normalizeAssignee(item.assignee ?? item.para)
@@ -142,9 +153,18 @@ function recipientsForItem(item, subs) {
   return subs.filter((s) => normalizeAssignee(s.memberKey) === who)
 }
 
-function inLeadWindow(now, eventAt, leadMinutes, windowMs) {
+/**
+ * Fire when:
+ * 1) Primary window: [remindAt, remindAt + windowMs) — ideal cron hit
+ * 2) Catch-up: missed primary window but still before event (+ short grace)
+ *    so late Activar avisos / delayed cron still deliver once.
+ */
+function shouldRemind(now, eventAt, leadMinutes, windowMs) {
   const remindAt = eventAt - leadMinutes * 60 * 1000
-  return now >= remindAt && now < remindAt + windowMs
+  if (now < remindAt) return { ok: false, reason: 'too_early', remindAt }
+  if (now < remindAt + windowMs) return { ok: true, reason: 'primary_window', remindAt }
+  if (now < eventAt + windowMs) return { ok: true, reason: 'catch_up', remindAt }
+  return { ok: false, reason: 'past_event', remindAt }
 }
 
 async function main() {
@@ -161,7 +181,7 @@ async function main() {
   const db = admin.firestore()
 
   const tz = process.env.REMINDER_TZ || 'Europe/Madrid'
-  const windowMin = Number(process.env.REMINDER_WINDOW_MINUTES || 20)
+  const windowMin = Number(process.env.REMINDER_WINDOW_MINUTES || 45)
   const now = Date.now()
   const windowMs = windowMin * 60 * 1000
 
@@ -204,8 +224,14 @@ async function main() {
     const date = String(d.date || '')
     const time = String(d.time || '')
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}/.test(time)) continue
-    const eventAt = eventUtcMs(date, time.slice(0, 5), tz)
-    // Keep items whose event is still upcoming (or just started) within max lead + window
+    let eventAt
+    try {
+      eventAt = eventUtcMs(date, time.slice(0, 5), tz)
+    } catch (e) {
+      console.warn('skip bad datetime', doc.id, date, time, String(e.message || e))
+      continue
+    }
+    // Keep items from max-lead before event through short grace after start
     const maxLeadMs = 1440 * 60 * 1000
     if (now < eventAt + windowMs && now >= eventAt - maxLeadMs - windowMs) {
       agenda.push({ id: doc.id, ...d, eventAt })
@@ -213,7 +239,17 @@ async function main() {
   }
 
   if (!agenda.length) {
-    console.log(JSON.stringify({ ok: true, sent: 0, checked: itemsSnap.size, reason: 'no_upcoming_agenda' }))
+    console.log(
+      JSON.stringify({
+        ok: true,
+        sent: 0,
+        checked: itemsSnap.size,
+        reason: 'no_upcoming_agenda',
+        nowMadrid: new Date(now).toLocaleString('es-ES', { timeZone: tz }),
+        tz,
+        windowMin,
+      }),
+    )
     return
   }
 
@@ -253,6 +289,12 @@ async function main() {
         HOUSEHOLD.has(normalizeAssignee(s.memberKey) || ''),
     )
 
+  const activeByMember = {}
+  for (const s of subs) {
+    const k = s.memberKey || '?'
+    activeByMember[k] = (activeByMember[k] || 0) + 1
+  }
+
   let sent = 0
   let skipped = 0
   const errors = []
@@ -262,17 +304,43 @@ async function main() {
     const who = normalizeAssignee(item.assignee ?? item.para)
     const targets = recipientsForItem(item, subs)
 
-    // Group targets by lead window — only notify those currently in their personal window
-    const dueTargets = targets.filter((t) => inLeadWindow(now, item.eventAt, t.leadMinutes, windowMs))
+    const dueTargets = []
+    const skipReasons = []
+    for (const t of targets) {
+      const decision = shouldRemind(now, item.eventAt, t.leadMinutes, windowMs)
+      if (decision.ok) {
+        dueTargets.push({ ...t, remindReason: decision.reason })
+      } else {
+        skipReasons.push({ memberKey: t.memberKey, reason: decision.reason })
+      }
+    }
 
     targetingLog.push({
       itemId: item.id,
       title: item.title,
+      kind: item.kind,
       assignee: who,
-      due: dueTargets.map((t) => ({ memberKey: t.memberKey, leadMinutes: t.leadMinutes })),
+      eventMadrid: new Date(item.eventAt).toLocaleString('es-ES', { timeZone: tz }),
+      targets: targets.map((t) => t.memberKey),
+      due: dueTargets.map((t) => ({
+        memberKey: t.memberKey,
+        leadMinutes: t.leadMinutes,
+        reason: t.remindReason,
+      })),
+      skipReasons: skipReasons.slice(0, 10),
     })
 
-    if (!who || !dueTargets.length) {
+    if (!who) {
+      skipped++
+      continue
+    }
+    if (!targets.length) {
+      skipped++
+      targetingLog[targetingLog.length - 1].note =
+        'No hay suscripciones push activas para este assignee. Cada perfil debe tocar Activar avisos en su móvil.'
+      continue
+    }
+    if (!dueTargets.length) {
       skipped++
       continue
     }
@@ -352,6 +420,7 @@ async function main() {
         uid: sample.uid || null,
         deliveredTo,
         title: item.title,
+        remindReason: sample.remindReason || 'primary_window',
       })
     }
   }
@@ -361,10 +430,18 @@ async function main() {
       ok: true,
       sent,
       skipped,
+      activeSubs: subs.length,
+      activeByMember,
+      missingMembers: [...HOUSEHOLD].filter((m) => !activeByMember[m]),
       targeting: targetingLog.slice(0, 20),
       errors: errors.slice(0, 10),
       windowMin,
       tz,
+      nowMadrid: new Date(now).toLocaleString('es-ES', { timeZone: tz }),
+      note:
+        subs.length === 0
+          ? 'Ninguna suscripción push activa. Cada móvil debe abrir la PWA y tocar Activar avisos.'
+          : undefined,
     }),
   )
 }

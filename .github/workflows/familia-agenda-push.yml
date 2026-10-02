@@ -1,5 +1,6 @@
 # Closed-app mobile Web Push for Familia Hellen y Mati Agenda (citas/compromisos) — NOT email,
 # NOT tareas diarias (chores). Fires ~every 15 min; per-profile leadMinutes + assignee targeting.
+# Timezone: Europe/Madrid (CEST/CET). Catch-up sends until event if primary window was missed.
 #
 # Required repo secrets (Settings → Secrets and variables → Actions):
 #   FIREBASE_SERVICE_ACCOUNT_JSON  — full JSON of a Firebase Admin SDK service account
@@ -11,7 +12,8 @@ name: Familia agenda push reminders
 
 on:
   schedule:
-    - cron: '*/15 * * * *'
+    # Explicit quarters — more reliable than */15 on GitHub-hosted runners
+    - cron: '0,15,30,45 * * * *'
   workflow_dispatch:
 
 jobs:
@@ -33,12 +35,11 @@ jobs:
           FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
         run: node scripts/migrate-teo-to-hellen.mjs
       - name: Send due reminders
-        continue-on-error: true
         env:
           FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
           VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
           VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
           VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT }}
           REMINDER_TZ: Europe/Madrid
-          REMINDER_WINDOW_MINUTES: '20'
+          REMINDER_WINDOW_MINUTES: '45'
         run: node scripts/send-agenda-reminders.mjs
