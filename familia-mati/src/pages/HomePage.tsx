@@ -18,8 +18,18 @@ import { useAuthStore } from '../store/authStore'
 import { useOrgStore } from '../store/orgStore'
 
 type AgendaTab = 'hoy' | 'proximos'
+type ParaAssignee = MemberKey | 'todos'
 
 const HOUSEHOLD = FAMILY_MEMBERS.filter((m) => m.key === 'sebas' || m.key === 'lore' || m.key === 'hellen')
+
+/** Default "Para" from the active filter chip (not hardcoded todos). */
+function assigneeFromFilter(filter: MemberKey | 'todos'): ParaAssignee {
+  if (filter === 'todos' || filter === 'sebas' || filter === 'lore' || filter === 'hellen') {
+    return filter
+  }
+  // bebé chip has no Para option / push target → Todos
+  return 'todos'
+}
 
 export function HomePage() {
   const user = useAuthStore((s) => s.user)!
@@ -35,10 +45,15 @@ export function HomePage() {
   const setStatus = useOrgStore((s) => s.setStatus)
   const deleteItem = useOrgStore((s) => s.deleteItem)
 
+  const filterDefault = assigneeFromFilter(filterMember)
+
   // —— Tareas diarias form ——
   const [dailyTitle, setDailyTitle] = useState('')
   const [dailyNotes, setDailyNotes] = useState('')
-  const [dailyAssignee, setDailyAssignee] = useState<MemberKey | 'todos'>('todos')
+  const [dailyAssignee, setDailyAssignee] = useState<ParaAssignee>(() =>
+    assigneeFromFilter(useOrgStore.getState().filterMember),
+  )
+  const [dailyAssigneeTouched, setDailyAssigneeTouched] = useState(false)
   const [dailyEditing, setDailyEditing] = useState<OrgItem | null>(null)
   const [dailyBusy, setDailyBusy] = useState(false)
 
@@ -46,7 +61,10 @@ export function HomePage() {
   const [agendaTitle, setAgendaTitle] = useState('')
   const [agendaNotes, setAgendaNotes] = useState('')
   const [agendaKind, setAgendaKind] = useState<ItemKind>('cita')
-  const [agendaAssignee, setAgendaAssignee] = useState<MemberKey | 'todos'>('todos')
+  const [agendaAssignee, setAgendaAssignee] = useState<ParaAssignee>(() =>
+    assigneeFromFilter(useOrgStore.getState().filterMember),
+  )
+  const [agendaAssigneeTouched, setAgendaAssigneeTouched] = useState(false)
   const [agendaDate, setAgendaDate] = useState(todayISO())
   const [agendaTime, setAgendaTime] = useState('')
   const [agendaEditing, setAgendaEditing] = useState<OrgItem | null>(null)
@@ -54,6 +72,16 @@ export function HomePage() {
   const [agendaTab, setAgendaTab] = useState<AgendaTab>('hoy')
 
   useEffect(() => subscribe(), [subscribe])
+
+  // Keep create-form Para aligned with the active chip unless the user (or edit) set it explicitly.
+  useEffect(() => {
+    if (!dailyEditing && !dailyAssigneeTouched) {
+      setDailyAssignee(filterDefault)
+    }
+    if (!agendaEditing && !agendaAssigneeTouched) {
+      setAgendaAssignee(filterDefault)
+    }
+  }, [filterDefault, dailyEditing, dailyAssigneeTouched, agendaEditing, agendaAssigneeTouched])
 
   const today = todayISO()
   const filtered = useMemo(() => {
@@ -85,7 +113,8 @@ export function HomePage() {
   function resetDaily() {
     setDailyTitle('')
     setDailyNotes('')
-    setDailyAssignee('todos')
+    setDailyAssignee(assigneeFromFilter(useOrgStore.getState().filterMember))
+    setDailyAssigneeTouched(false)
     setDailyEditing(null)
   }
 
@@ -93,7 +122,8 @@ export function HomePage() {
     setAgendaTitle('')
     setAgendaNotes('')
     setAgendaKind('cita')
-    setAgendaAssignee('todos')
+    setAgendaAssignee(assigneeFromFilter(useOrgStore.getState().filterMember))
+    setAgendaAssigneeTouched(false)
     setAgendaDate(todayISO())
     setAgendaTime('')
     setAgendaEditing(null)
@@ -141,7 +171,7 @@ export function HomePage() {
           title: label,
           notes: '',
           kind: 'chore',
-          assignee: 'todos',
+          assignee: assigneeFromFilter(useOrgStore.getState().filterMember),
           date: todayISO(),
           time: '',
         },
@@ -192,6 +222,7 @@ export function HomePage() {
     setDailyTitle(item.title)
     setDailyNotes(item.notes)
     setDailyAssignee(item.assignee === 'bebe' ? 'todos' : item.assignee)
+    setDailyAssigneeTouched(true)
   }
 
   function startEditAgenda(item: OrgItem) {
@@ -200,6 +231,7 @@ export function HomePage() {
     setAgendaNotes(item.notes)
     setAgendaKind(item.kind === 'tarea' ? 'tarea' : 'cita')
     setAgendaAssignee(item.assignee === 'bebe' ? 'todos' : item.assignee)
+    setAgendaAssigneeTouched(true)
     setAgendaDate(item.date || todayISO())
     setAgendaTime(item.time)
   }
@@ -287,7 +319,10 @@ export function HomePage() {
               <span className="mb-1 block font-bold text-[var(--ink-soft)]">Para</span>
               <select
                 value={dailyAssignee}
-                onChange={(e) => setDailyAssignee(e.target.value as MemberKey | 'todos')}
+                onChange={(e) => {
+                  setDailyAssigneeTouched(true)
+                  setDailyAssignee(e.target.value as ParaAssignee)
+                }}
                 className="w-full rounded-xl border border-[var(--line)] bg-white px-3 py-2.5"
               >
                 <option value="todos">Todos</option>
@@ -423,7 +458,10 @@ export function HomePage() {
                 <span className="mb-1 block font-bold text-[var(--ink-soft)]">Para</span>
                 <select
                   value={agendaAssignee}
-                  onChange={(e) => setAgendaAssignee(e.target.value as MemberKey | 'todos')}
+                  onChange={(e) => {
+                    setAgendaAssigneeTouched(true)
+                    setAgendaAssignee(e.target.value as ParaAssignee)
+                  }}
                   className="w-full rounded-xl border border-[var(--line)] bg-white px-3 py-2.5"
                 >
                   <option value="todos">Todos</option>

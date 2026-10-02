@@ -1,7 +1,7 @@
 {
   "name": "familia-mati",
   "private": true,
-  "version": "1.0.2-hellen-email",
+  "version": "1.0.3-para-filtro",
   "type": "module",
   "scripts": {
     "dev": "vite",
