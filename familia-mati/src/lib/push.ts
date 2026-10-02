@@ -15,10 +15,30 @@ function sessionDismissKey(uid: string, memberKey: string) {
   return `familia-mati-push-dismissed:${uid}:${memberKey}`
 }
 
-export function isPushConfigured(): boolean {
-  return Boolean(
-    VAPID_PUBLIC && isFirebaseConfigured() && 'serviceWorker' in navigator && 'PushManager' in window,
+/** True when the client build baked in the public VAPID key. */
+export function hasVapidPublicKey(): boolean {
+  return Boolean(VAPID_PUBLIC)
+}
+
+/** Browser can do Web Push (SW + PushManager + Notification). */
+export function isBrowserPushCapable(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    'serviceWorker' in navigator &&
+    'PushManager' in window &&
+    'Notification' in window
   )
+}
+
+export function isPushConfigured(): boolean {
+  return Boolean(hasVapidPublicKey() && isFirebaseConfigured() && isBrowserPushCapable())
+}
+
+export function pushConfigBlockReason(): 'ok' | 'no-vapid' | 'no-firebase' | 'no-browser-push' {
+  if (!hasVapidPublicKey()) return 'no-vapid'
+  if (!isFirebaseConfigured()) return 'no-firebase'
+  if (!isBrowserPushCapable()) return 'no-browser-push'
+  return 'ok'
 }
 
 export function urlBase64ToUint8Array(base64String: string): Uint8Array {

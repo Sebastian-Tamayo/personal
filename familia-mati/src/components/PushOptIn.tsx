@@ -13,6 +13,7 @@ import {
   isPushConfigured,
   isPushPromptSessionDismissed,
   isThisUserPushActive,
+  pushConfigBlockReason,
   type PushStatus,
 } from '../lib/push'
 import { useAuthStore } from '../store/authStore'
@@ -192,9 +193,21 @@ export function PushOptIn() {
 
       {unsupported ? (
         <p className="rounded-xl bg-white/80 px-3 py-2 text-sm text-[var(--ink-soft)]">
-          {!isPushConfigured()
-            ? 'Avisos no configurados aún en el servidor (falta VAPID).'
-            : 'Este navegador no admite Web Push.'}
+          {(() => {
+            const why = pushConfigBlockReason()
+            if (why === 'no-vapid') {
+              return 'Avisos no configurados en el servidor (falta clave VAPID pública en el build). Avisa a Sebas.'
+            }
+            if (why === 'no-firebase') {
+              return 'Firebase no está configurado en esta instalación.'
+            }
+            if (why === 'no-browser-push') {
+              return 'Este navegador no admite avisos push aquí. En iPhone: iOS 16.4+, abre desde el icono en la pantalla de inicio (no desde Safari suelto). En Android: usa Chrome e instala / añade a inicio.'
+            }
+            return isPushConfigured()
+              ? 'Este navegador no admite Web Push.'
+              : 'Avisos no disponibles en este dispositivo.'
+          })()}
         </p>
       ) : status === 'denied' ? (
         <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900">
