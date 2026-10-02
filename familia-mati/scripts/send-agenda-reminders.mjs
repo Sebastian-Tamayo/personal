@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 /**
- * Send Web Push before agenda items (cita/tarea with date+time).
- * Lead time is per-user (familia_users.reminderLeadMinutes); default 120 min.
- * Runs outside the browser (GitHub Actions cron or any host). Does NOT use setTimeout in the app.
+ * Send Web Push for Agenda · citas y compromisos ONLY (kinds: cita, tarea).
+ * NEVER notifies for Tareas diarias (kind: chore) or bebé items.
+ * Lead time is per-user/persona (familia_users.personaSettings / reminderLeadMinutes); default 120 min.
+ * Runs outside the browser (GitHub Actions cron). Mobile Web Push — not email.
  *
  * Required env (never commit):
  *   FIREBASE_SERVICE_ACCOUNT_JSON  — full service account JSON string
@@ -195,6 +196,8 @@ async function main() {
   const agenda = []
   for (const doc of itemsSnap.docs) {
     const d = doc.data() || {}
+    // Agenda only: cita + tarea (compromisos). Skip chores (tareas diarias) and bebé.
+    if (d.kind === 'chore' || d.kind === 'bebe') continue
     if (d.kind !== 'cita' && d.kind !== 'tarea') continue
     if (d.status === 'hecha') continue
     const date = String(d.date || '')

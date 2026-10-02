@@ -107,8 +107,9 @@ export function PushOptIn() {
           Avisar con antelación
         </h2>
         <p className="mb-3 text-sm font-semibold text-[#0c4a6e]/90">
-          Avisos activos para <span className="font-extrabold">{who}</span>. Elige cuánto antes
-          (solo este perfil).
+          Avisos activos para <span className="font-extrabold">{who}</span> · solo{' '}
+          <span className="font-extrabold">Agenda (citas y compromisos)</span>, no las tareas
+          diarias de casa. Elige cuánto antes.
         </p>
         <div className="flex flex-wrap gap-2" role="group" aria-label="Antelación del aviso">
           {REMINDER_LEAD_PRESETS.map((p) => {
@@ -133,8 +134,8 @@ export function PushOptIn() {
           })}
         </div>
         <p className="mt-2 text-xs font-semibold text-[#0c4a6e]/75">
-          Ahora: {formatLeadLabel(leadMinutes)} antes de tus citas y compromisos.
-        </p>
+        Ahora: {formatLeadLabel(leadMinutes)} antes de citas/compromisos de la agenda.
+      </p>
         {leadError ? (
           <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900" role="alert">
             {leadError}
@@ -169,10 +170,15 @@ export function PushOptIn() {
         Activar avisos
       </h2>
       <p className="mb-2 text-sm font-semibold text-[#0c4a6e]">
-        Perfil <span className="font-extrabold">{who}</span>: activa avisos para{' '}
-        <span className="font-extrabold">este perfil</span> (Lore y Hellen aprueban por separado).
+        Perfil <span className="font-extrabold">{who}</span>: avisos al móvil para la{' '}
+        <span className="font-extrabold">Agenda · citas y compromisos</span> (no para tareas
+        diarias de casa). Lore y Hellen aprueban por separado.
       </p>
       <ul className="mb-3 list-disc space-y-1 pl-4 text-xs font-semibold text-[#0c4a6e]/90">
+        <li>
+          Solo <span className="font-extrabold">citas y compromisos</span> con fecha y hora — las
+          tareas diarias (barrer, platos…) no envían aviso.
+        </li>
         <li>Mismo correo de Lore → dos perfiles; cada uno confirma avisos por su lado.</li>
         <li>
           Funciona con la app <span className="font-extrabold">cerrada</span> (PWA en el inicio).
