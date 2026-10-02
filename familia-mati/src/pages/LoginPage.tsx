@@ -4,7 +4,7 @@ import { AppShell } from '../components/AppShell'
 import { type MemberKey } from '../lib/family'
 import { useAuthStore } from '../store/authStore'
 
-type RegisterChoice = 'sebas' | 'lore' | 'hellen' | 'lore_hellen'
+type RegisterChoice = 'sebas' | 'lore' | 'teo' | 'lore_teo'
 
 export function LoginPage() {
   const user = useAuthStore((s) => s.user)
@@ -22,7 +22,6 @@ export function LoginPage() {
   const [choice, setChoice] = useState<RegisterChoice>('sebas')
   const [submitting, setSubmitting] = useState(false)
 
-  // Dual account still needs picker before home — stay on shell via ProtectedRoute home
   if (configured && !loading && user && !needsPersonaPick) return <Navigate to="/" replace />
   if (configured && !loading && user && needsPersonaPick) return <Navigate to="/" replace />
 
@@ -34,9 +33,9 @@ export function LoginPage() {
       if (mode === 'login') await login(email, password)
       else {
         const memberKey: MemberKey =
-          choice === 'sebas' ? 'sebas' : choice === 'hellen' ? 'hellen' : 'lore'
+          choice === 'sebas' ? 'sebas' : choice === 'teo' ? 'teo' : 'lore'
         await register(email, password, memberKey, {
-          linkHellen: choice === 'lore_hellen',
+          linkTeo: choice === 'lore_teo',
         })
       }
     } catch {
@@ -71,16 +70,16 @@ export function LoginPage() {
       soft: '#fbcfe8',
     },
     {
-      id: 'hellen',
-      label: 'Hellen',
+      id: 'teo',
+      label: 'Teo',
       emoji: '🟣',
-      hint: 'Su propio correo (Oppo)',
+      hint: 'Correo de Teo (Oppo) · Teodoro31@gmail.com',
       color: '#6d28d9',
       soft: '#ddd6fe',
     },
     {
-      id: 'lore_hellen',
-      label: 'Lore+He',
+      id: 'lore_teo',
+      label: 'Lore+Teo',
       emoji: '🩷🟣',
       hint: 'Legacy: 2 perfiles en correo de Lore',
       color: '#9d174d',
@@ -89,7 +88,7 @@ export function LoginPage() {
   ]
 
   return (
-    <AppShell title="Organización diaria · Sebas, Lore y Hellen">
+    <AppShell title="Organización diaria · Sebas, Lore y Teo">
       {!configured ? (
         <section className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-5 shadow-[var(--shadow)]">
           <h2 className="mb-2 text-lg font-bold">Firebase no configurado</h2>
@@ -141,15 +140,15 @@ export function LoginPage() {
                   ))}
                 </div>
                 <p className="mt-2 text-xs leading-snug text-[var(--ink-soft)]">
-                  {chips.find((c) => c.id === choice)?.hint}. Hellen entra con{' '}
+                  {chips.find((c) => c.id === choice)?.hint}. Teo entra con{' '}
                   <span className="font-bold">su propio correo</span> (cuenta hijo · sin Finanzas).
-                  Lore puede seguir con dual-perfil en su correo si hace falta.
+                  Lore tiene su perfil adulto; la app se llama Familia Hellen y Mati.
                 </p>
               </div>
             ) : (
               <p className="rounded-xl bg-[#f5f3ff] px-3 py-2 text-xs font-semibold text-[#5b21b6]">
-                Hellen (Oppo): entra con su correo. Lore: el suyo (selector si hay 2 perfiles). Sebas:
-                el suyo. Avisos = push al móvil, no email.
+                Teo (Oppo): Teodoro31@gmail.com. Lore: su correo. Sebas: el suyo. Avisos = push al
+                móvil, no email.
               </p>
             )}
 
@@ -158,9 +157,11 @@ export function LoginPage() {
               <input
                 type="email"
                 required
+                autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="rounded-xl border border-[var(--line)] bg-white/90 px-3 py-2.5 outline-none ring-[var(--accent)] focus:ring-2"
+                className="rounded-xl border border-[var(--line)] bg-white/80 px-3 py-2.5 outline-none ring-[var(--accent)] focus:ring-2"
+                placeholder="tu@correo.com"
               />
             </label>
             <label className="flex flex-col gap-1 text-sm">
@@ -169,20 +170,22 @@ export function LoginPage() {
                 type="password"
                 required
                 minLength={6}
+                autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="rounded-xl border border-[var(--line)] bg-white/90 px-3 py-2.5 outline-none ring-[var(--accent)] focus:ring-2"
+                className="rounded-xl border border-[var(--line)] bg-white/80 px-3 py-2.5 outline-none ring-[var(--accent)] focus:ring-2"
+                placeholder="Mínimo 6 caracteres"
               />
             </label>
             {error ? (
-              <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-800" role="alert">
+              <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-[var(--warn)]" role="alert">
                 {error}
               </p>
             ) : null}
             <button
               type="submit"
-              disabled={submitting}
-              className="rounded-xl bg-[var(--accent)] px-4 py-3 text-sm font-extrabold text-white hover:bg-[var(--accent-deep)] disabled:opacity-60"
+              disabled={submitting || loading}
+              className="mt-1 rounded-xl bg-[var(--accent)] px-4 py-3 text-sm font-extrabold text-white disabled:opacity-60"
             >
               {submitting ? 'Espera…' : mode === 'login' ? 'Entrar' : 'Crear cuenta'}
             </button>

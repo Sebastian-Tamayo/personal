@@ -51,19 +51,24 @@ let unsub: Unsubscribe | null = null
 
 function mapItem(id: string, data: Record<string, unknown>): OrgItem {
   const rawAssignee = String(data.assignee ?? 'todos')
-  const normalized =
-    rawAssignee === 'todos'
-      ? 'todos'
-      : rawAssignee === 'hija'
-        ? 'hellen'
-        : (rawAssignee as MemberKey | 'todos')
+  let assignee: MemberKey | 'todos' = 'todos'
+  if (rawAssignee === 'todos') assignee = 'todos'
+  else if (rawAssignee === 'hija' || rawAssignee === 'hellen') assignee = 'teo'
+  else if (
+    rawAssignee === 'sebas' ||
+    rawAssignee === 'lore' ||
+    rawAssignee === 'teo' ||
+    rawAssignee === 'bebe'
+  ) {
+    assignee = rawAssignee
+  }
   return {
     id,
     title: String(data.title ?? ''),
     notes: String(data.notes ?? ''),
     kind: (data.kind as ItemKind) || 'tarea',
     status: data.status === 'hecha' ? 'hecha' : 'pendiente',
-    assignee: normalized || 'todos',
+    assignee,
     date: String(data.date ?? ''),
     time: String(data.time ?? ''),
     createdAt: Number(data.createdAt) || 0,

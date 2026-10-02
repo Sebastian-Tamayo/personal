@@ -126,8 +126,15 @@ async function getServiceWorkerRegistration(timeoutMs = 4000): Promise<ServiceWo
 
 /**
  * True when THIS persona (memberKey) on this Auth account enabled push on this browser.
- * Lore enabling does not hide Hellen's Activar avisos (and vice versa).
+ * Lore enabling does not hide Teo's Activar avisos (and vice versa).
+ * Legacy memberKey `hellen` matches `teo`.
  */
+function memberKeysMatch(a: string, b: string): boolean {
+  const na = a === 'hellen' || a === 'hija' ? 'teo' : a
+  const nb = b === 'hellen' || b === 'hija' ? 'teo' : b
+  return na === nb
+}
+
 export async function isThisUserPushActive(uid: string, memberKey: string): Promise<boolean> {
   if (!uid || !memberKey) return false
   if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) {
@@ -136,6 +143,8 @@ export async function isThisUserPushActive(uid: string, memberKey: string): Prom
   if (Notification.permission !== 'granted') return false
 
   if (isPushEnabledLocally(uid, memberKey)) return true
+  // Legacy local key when profile migrated hellen → teo
+  if (memberKey === 'teo' && isPushEnabledLocally(uid, 'hellen')) return true
 
   try {
     const reg = await getServiceWorkerRegistration()
@@ -150,19 +159,25 @@ export async function isThisUserPushActive(uid: string, memberKey: string): Prom
         data.enabled !== false &&
         !data.dead &&
         String(data.uid || '') === uid &&
-        String(data.memberKey || '') === memberKey
+        memberKeysMatch(String(data.memberKey || ''), memberKey)
       ) {
         markPushEnabledLocally(uid, memberKey, sub.endpoint)
         return true
       }
     }
-    // Persona-scoped mirror doc
-    const personaDoc = await getDoc(doc(getDb(), 'familia_push_subs', `${uid}_${memberKey}`))
-    if (personaDoc.exists()) {
-      const data = personaDoc.data() || {}
-      if (data.enabled !== false && !data.dead && data.endpoint) {
-        markPushEnabledLocally(uid, memberKey, String(data.endpoint))
-        return true
+    // Persona-scoped mirror doc (teo + legacy hellen)
+    const personaIds =
+      memberKey === 'teo'
+        ? [`${uid}_teo`, `${uid}_hellen`]
+        : [`${uid}_${memberKey}`]
+    for (const pid of personaIds) {
+      const personaDoc = await getDoc(doc(getDb(), 'familia_push_subs', pid))
+      if (personaDoc.exists()) {
+        const data = personaDoc.data() || {}
+        if (data.enabled !== false && !data.dead && data.endpoint) {
+          markPushEnabledLocally(uid, memberKey, String(data.endpoint))
+          return true
+        }
       }
     }
   } catch {
@@ -220,7 +235,7 @@ export async function enablePushNotifications(uid: string, memberKey: string): P
   // Device endpoint doc — current active persona owns delivery on this phone
   await setDoc(doc(getDb(), 'familia_push_subs', deviceId), payload, { merge: true })
 
-  // Per-persona mirror so Lore/Hellen each keep an "enabled" record on shared Auth
+  // Per-persona mirror so Lore/Teo each keep an "enabled" record on shared Auth
   await setDoc(doc(getDb(), 'familia_push_subs', `${uid}_${memberKey}`), {
     ...payload,
     personaMirror: true,

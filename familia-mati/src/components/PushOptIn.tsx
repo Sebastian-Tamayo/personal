@@ -19,8 +19,8 @@ import {
 import { useAuthStore } from '../store/authStore'
 
 /**
- * Per active persona (Sebas / Lore / Hellen), not per Auth email alone.
- * On shared Lore+Hellen account: Lore enabling does not hide Hellen's prompt.
+ * Per active persona (Sebas / Lore / Teo), not per Auth email alone.
+ * On shared Lore+Teo account: Lore enabling does not hide Teo's prompt.
  */
 export function PushOptIn() {
   const user = useAuthStore((s) => s.user)
@@ -173,7 +173,7 @@ export function PushOptIn() {
       <p className="mb-2 text-sm font-semibold text-[#0c4a6e]">
         Perfil <span className="font-extrabold">{who}</span>: avisos al móvil para la{' '}
         <span className="font-extrabold">Agenda · citas y compromisos</span> (no para tareas
-        diarias de casa). Lore y Hellen aprueban por separado.
+        diarias de casa). Lore y Teo aprueban por separado.
       </p>
       <ul className="mb-3 list-disc space-y-1 pl-4 text-xs font-semibold text-[#0c4a6e]/90">
         <li>

@@ -1,4 +1,4 @@
-export type MemberKey = 'sebas' | 'lore' | 'hellen' | 'bebe'
+export type MemberKey = 'sebas' | 'lore' | 'teo' | 'bebe'
 export type UserRole = 'adulto' | 'hijo'
 export type ItemKind = 'cita' | 'tarea' | 'chore' | 'bebe'
 export type ItemStatus = 'pendiente' | 'hecha'
@@ -14,7 +14,7 @@ export interface FamilyMember {
   canLogin: boolean
 }
 
-/** 4 visual profiles; 3 can log in (Sebas, Lore, Hellen). Baby = visual only. */
+/** 4 visual profiles; 3 can log in (Sebas, Lore, Teo). Baby = visual only. */
 export const FAMILY_MEMBERS: FamilyMember[] = [
   {
     key: 'sebas',
@@ -37,9 +37,9 @@ export const FAMILY_MEMBERS: FamilyMember[] = [
     canLogin: true,
   },
   {
-    key: 'hellen',
-    name: 'Hellen',
-    short: 'He',
+    key: 'teo',
+    name: 'Teo',
+    short: 'T',
     role: 'hijo',
     color: '#6d28d9',
     colorSoft: '#ddd6fe',
@@ -58,12 +58,16 @@ export const FAMILY_MEMBERS: FamilyMember[] = [
   },
 ]
 
-/** Normalize legacy assignee keys (hija → hellen). */
+/**
+ * Normalize assignee / persona keys.
+ * Legacy: hija → teo, hellen → teo (profile label is Teo; app brand stays Familia Hellen y Mati).
+ */
 export function normalizeMemberKey(key: string | null | undefined): MemberKey | 'todos' | null {
   if (!key) return null
-  if (key === 'todos') return 'todos'
-  if (key === 'hija') return 'hellen'
-  if (key === 'sebas' || key === 'lore' || key === 'hellen' || key === 'bebe') return key
+  const k = String(key).trim().toLowerCase()
+  if (k === 'todos') return 'todos'
+  if (k === 'hija' || k === 'hellen') return 'teo'
+  if (k === 'sebas' || k === 'lore' || k === 'teo' || k === 'bebe') return k
   return null
 }
 
@@ -117,8 +121,8 @@ export function formatLeadLabel(minutes: number): string {
   return preset?.label || `${minutes} min`
 }
 
-/** Login personas available on one Auth account (Lore+Hellen share email). */
-export type PersonaKey = 'sebas' | 'lore' | 'hellen'
+/** Login personas available on one Auth account (legacy Lore+Teo share email). */
+export type PersonaKey = 'sebas' | 'lore' | 'teo'
 
 export interface PersonaSettings {
   reminderLeadMinutes: number
@@ -133,7 +137,7 @@ export interface UserProfile {
   displayName: string
   /** Minutes before event for the active persona. */
   reminderLeadMinutes: number
-  /** Personas linked to this Auth uid (e.g. lore+hellen). */
+  /** Personas linked to this Auth uid (e.g. lore+teo). */
   personas: PersonaKey[]
   /** Per-persona settings (lead time, etc.). */
   personaSettings: Partial<Record<PersonaKey, PersonaSettings>>
@@ -141,18 +145,24 @@ export interface UserProfile {
 }
 
 export function isPersonaKey(k: string | null | undefined): k is PersonaKey {
-  return k === 'sebas' || k === 'lore' || k === 'hellen'
+  const n = normalizeMemberKey(k)
+  return n === 'sebas' || n === 'lore' || n === 'teo'
 }
 
-/** Dedicated Hellen Auth emails (own account — not Lore’s shared dual-profile). */
-export const HELLEN_OWN_EMAILS = ['teodoro31@gmail.com'] as const
+/** Dedicated Teo Auth emails (own account — not Lore’s shared dual-profile). */
+export const TEO_OWN_EMAILS = ['teodoro31@gmail.com'] as const
+/** @deprecated use TEO_OWN_EMAILS */
+export const HELLEN_OWN_EMAILS = TEO_OWN_EMAILS
 
-export function isHellenOwnEmail(email: string | null | undefined): boolean {
+export function isTeoOwnEmail(email: string | null | undefined): boolean {
   const e = String(email || '')
     .trim()
     .toLowerCase()
-  return HELLEN_OWN_EMAILS.includes(e as (typeof HELLEN_OWN_EMAILS)[number])
+  return TEO_OWN_EMAILS.includes(e as (typeof TEO_OWN_EMAILS)[number])
 }
+
+/** @deprecated use isTeoOwnEmail */
+export const isHellenOwnEmail = isTeoOwnEmail
 
 export function defaultPersonaSettings(
   lead: number = DEFAULT_REMINDER_LEAD_MINUTES,

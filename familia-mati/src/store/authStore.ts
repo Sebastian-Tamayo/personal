@@ -10,8 +10,8 @@ import { create } from 'zustand'
 import {
   DEFAULT_REMINDER_LEAD_MINUTES,
   defaultPersonaSettings,
-  isHellenOwnEmail,
   isPersonaKey,
+  isTeoOwnEmail,
   memberByKey,
   normalizeMemberKey,
   normalizeReminderLeadMinutes,
@@ -29,7 +29,7 @@ const PICKER_DONE_SESSION = 'familia-mati-persona-picked'
 interface AuthState {
   user: User | null
   profile: UserProfile | null
-  /** Dual Lore+Hellen account: must pick persona after login. */
+  /** Dual Lore+Teo account: must pick persona after login. */
   needsPersonaPick: boolean
   loading: boolean
   error: string | null
@@ -40,12 +40,14 @@ interface AuthState {
     email: string,
     password: string,
     memberKey: MemberKey,
-    opts?: { linkHellen?: boolean },
+    opts?: { linkTeo?: boolean; linkHellen?: boolean },
   ) => Promise<void>
   logout: () => Promise<void>
   clearError: () => void
   isAdult: () => boolean
   setActivePersona: (key: PersonaKey) => Promise<void>
+  addTeoPersona: () => Promise<void>
+  /** @deprecated use addTeoPersona */
   addHellenPersona: () => Promise<void>
   updateReminderLeadMinutes: (minutes: number) => Promise<void>
 }
@@ -59,7 +61,7 @@ function mapAuthError(err: unknown): string {
     case 'auth/user-not-found':
       return 'Correo o contraseña incorrectos.'
     case 'auth/email-already-in-use':
-      return 'Ese correo ya está registrado. Si es el de Lore, entra y usa «Añadir perfil Hellen» o el selector Lore/Hellen.'
+      return 'Ese correo ya está registrado. Si es el de Lore, entra y usa «Añadir perfil Teo» o el selector Lore/Teo.'
     case 'auth/weak-password':
       return 'La contraseña debe tener al menos 6 caracteres.'
     default:
@@ -70,7 +72,8 @@ function mapAuthError(err: unknown): string {
 function localActivePersona(uid: string): PersonaKey | null {
   try {
     const v = localStorage.getItem(`${ACTIVE_PERSONA_LS}:${uid}`)
-    return isPersonaKey(v) ? v : null
+    const n = normalizeMemberKey(v)
+    return n && isPersonaKey(n) ? n : null
   } catch {
     return null
   }
@@ -108,9 +111,12 @@ function clearPickerDone(uid?: string) {
   }
 }
 
+/** Map legacy hellen → teo in personas lists. */
 function parsePersonas(raw: unknown, fallback: PersonaKey): PersonaKey[] {
   if (Array.isArray(raw)) {
-    const list = raw.filter((x): x is PersonaKey => isPersonaKey(String(x)))
+    const list = raw
+      .map((x) => normalizeMemberKey(String(x)))
+      .filter((x): x is PersonaKey => x !== null && isPersonaKey(x))
     if (list.length) return [...new Set(list)]
   }
   return [fallback]
@@ -124,7 +130,8 @@ function parsePersonaSettings(
   const out: Partial<Record<PersonaKey, PersonaSettings>> = {}
   const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
   for (const p of personas) {
-    const entry = obj[p]
+    // Prefer teo settings; fall back to legacy hellen key in Firestore
+    const entry = obj[p] ?? (p === 'teo' ? obj.hellen : undefined)
     if (entry && typeof entry === 'object') {
       const lead = normalizeReminderLeadMinutes(
         (entry as { reminderLeadMinutes?: unknown }).reminderLeadMinutes ?? legacyLead,
@@ -164,19 +171,20 @@ function buildActiveProfile(
 async function loadOrCreateProfile(
   user: User,
   memberKey?: MemberKey,
-  opts?: { linkHellen?: boolean },
+  opts?: { linkTeo?: boolean; linkHellen?: boolean },
 ): Promise<{ profile: UserProfile; needsPersonaPick: boolean }> {
   const ref = doc(getDb(), 'familia_users', user.uid)
   const snap = await getDoc(ref)
   const email = user.email || ''
+  const linkTeo = Boolean(opts?.linkTeo || opts?.linkHellen)
 
   if (snap.exists()) {
     const d = snap.data()
     const emailLower = String(d.email || email || '').trim()
 
-    // Dedicated Hellen Auth account → always hellen-only (never Lore dual picker)
-    if (isHellenOwnEmail(emailLower) || isHellenOwnEmail(email)) {
-      const personas: PersonaKey[] = ['hellen']
+    // Dedicated Teo Auth account → always teo-only (never Lore dual picker)
+    if (isTeoOwnEmail(emailLower) || isTeoOwnEmail(email)) {
+      const personas: PersonaKey[] = ['teo']
       const legacyLead = normalizeReminderLeadMinutes(
         d.reminderLeadMinutes ?? DEFAULT_REMINDER_LEAD_MINUTES,
       )
@@ -184,7 +192,7 @@ async function loadOrCreateProfile(
       const profile = buildActiveProfile(
         user.uid,
         emailLower || email,
-        'hellen',
+        'teo',
         personas,
         personaSettings,
         Number(d.updatedAt) || Date.now(),
@@ -194,12 +202,12 @@ async function loadOrCreateProfile(
         {
           uid: user.uid,
           email: profile.email,
-          memberKey: 'hellen',
-          activeMemberKey: 'hellen',
+          memberKey: 'teo',
+          activeMemberKey: 'teo',
           personas,
           personaSettings,
           role: 'hijo',
-          displayName: 'Hellen',
+          displayName: 'Teo',
           reminderLeadMinutes: profile.reminderLeadMinutes,
           updatedAt: Date.now(),
         },
@@ -210,28 +218,25 @@ async function loadOrCreateProfile(
     }
 
     const rawKey = String(d.memberKey || d.activeMemberKey || 'sebas')
-    const normalized = normalizeMemberKey(rawKey === 'hija' ? 'hellen' : rawKey)
+    const normalized = normalizeMemberKey(rawKey)
     const fallbackKey: PersonaKey =
       normalized && isPersonaKey(normalized) ? normalized : 'sebas'
 
     let personas = parsePersonas(d.personas, fallbackKey)
-    // Migrate: lore-only account can later add hellen
     if (fallbackKey === 'lore' && !personas.includes('lore')) personas = ['lore', ...personas]
-    if (fallbackKey === 'hellen' && personas.length === 1 && personas[0] === 'hellen') {
-      // Hellen-only Auth — keep as single persona
-    }
 
     const legacyLead = normalizeReminderLeadMinutes(
       d.reminderLeadMinutes ?? DEFAULT_REMINDER_LEAD_MINUTES,
     )
     const personaSettings = parsePersonaSettings(d.personaSettings, personas, legacyLead)
 
-    const dual = personas.includes('lore') && personas.includes('hellen')
-    const storedActive = isPersonaKey(String(d.activeMemberKey || ''))
-      ? (String(d.activeMemberKey) as PersonaKey)
-      : null
+    const dual = personas.includes('lore') && personas.includes('teo')
+    const storedRaw = String(d.activeMemberKey || '')
+    const storedNorm = normalizeMemberKey(storedRaw)
+    const storedActive: PersonaKey | null =
+      storedNorm && isPersonaKey(storedNorm) ? storedNorm : null
     const localActive = localActivePersona(user.uid)
-    let active: PersonaKey =
+    const active: PersonaKey =
       (localActive && personas.includes(localActive) && localActive) ||
       (storedActive && personas.includes(storedActive) && storedActive) ||
       (personas.includes(fallbackKey) ? fallbackKey : personas[0])
@@ -247,7 +252,7 @@ async function loadOrCreateProfile(
       Number(d.updatedAt) || Date.now(),
     )
 
-    // Persist migration fields
+    // Persist migration hellen → teo
     await setDoc(
       ref,
       {
@@ -268,15 +273,14 @@ async function loadOrCreateProfile(
     return { profile, needsPersonaPick }
   }
 
-  // New account
-  // Dedicated Hellen email → always hellen profile
-  if (isHellenOwnEmail(email)) {
-    const personas: PersonaKey[] = ['hellen']
+  // New account — dedicated Teo email
+  if (isTeoOwnEmail(email)) {
+    const personas: PersonaKey[] = ['teo']
     const personaSettings = parsePersonaSettings({}, personas, DEFAULT_REMINDER_LEAD_MINUTES)
     const profile = buildActiveProfile(
       user.uid,
       email,
-      'hellen',
+      'teo',
       personas,
       personaSettings,
       Date.now(),
@@ -284,12 +288,12 @@ async function loadOrCreateProfile(
     await setDoc(ref, {
       uid: profile.uid,
       email: profile.email,
-      memberKey: 'hellen',
-      activeMemberKey: 'hellen',
+      memberKey: 'teo',
+      activeMemberKey: 'teo',
       personas,
       personaSettings,
       role: 'hijo',
-      displayName: 'Hellen',
+      displayName: 'Teo',
       reminderLeadMinutes: profile.reminderLeadMinutes,
       updatedAt: profile.updatedAt,
     })
@@ -297,21 +301,18 @@ async function loadOrCreateProfile(
     return { profile, needsPersonaPick: false }
   }
 
-  let key: PersonaKey =
-    memberKey && isPersonaKey(memberKey) ? memberKey : 'sebas'
-  if (key === 'hellen' && opts?.linkHellen) {
-    // Creating Hellen-only on new email — rare; treat as hellen
-  }
+  let key: PersonaKey = memberKey && isPersonaKey(memberKey) ? memberKey : 'sebas'
+  // Normalize register choice if someone still passes hellen
+  const keyNorm = normalizeMemberKey(key)
+  if (keyNorm && isPersonaKey(keyNorm)) key = keyNorm
 
   let personas: PersonaKey[] = [key]
-  if (key === 'lore' && opts?.linkHellen) {
-    personas = ['lore', 'hellen']
+  if (key === 'lore' && linkTeo) {
+    personas = ['lore', 'teo']
   }
-  // Registering as "Hellen" on a brand-new email still works as hellen-only
-  // Prefer Lore+Hellen bundle when registering Hellen with intent to share — handled in UI
 
   const personaSettings = parsePersonaSettings({}, personas, DEFAULT_REMINDER_LEAD_MINUTES)
-  const dual = personas.includes('lore') && personas.includes('hellen')
+  const dual = personas.includes('lore') && personas.includes('teo')
   const active: PersonaKey = dual ? 'lore' : key
   const profile = buildActiveProfile(
     user.uid,
@@ -377,7 +378,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ error: null, loading: true })
     try {
       await signInWithEmailAndPassword(getFirebaseAuth(), email.trim(), password)
-      // needsPersonaPick set in onAuthStateChanged
     } catch (err) {
       set({ error: mapAuthError(err), loading: false })
       throw err
@@ -390,7 +390,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       const cred = await createUserWithEmailAndPassword(getFirebaseAuth(), email.trim(), password)
       const { profile, needsPersonaPick } = await loadOrCreateProfile(cred.user, memberKey, {
-        linkHellen: Boolean(opts?.linkHellen),
+        linkTeo: Boolean(opts?.linkTeo || opts?.linkHellen),
       })
       if (!needsPersonaPick) markPickerDone(cred.user.uid)
       set({ user: cred.user, profile, needsPersonaPick, loading: false })
@@ -412,8 +412,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   isAdult: () => {
     const p = get().profile
     if (!p) return false
-    // Active persona drives gates — Hellen never adult even on shared Lore email
-    if (p.memberKey === 'hellen' || p.role === 'hijo') return false
+    // Teo (hijo) never adult — even on shared Lore email
+    if (p.memberKey === 'teo' || p.role === 'hijo') return false
     return p.memberKey === 'sebas' || p.memberKey === 'lore' || p.role === 'adulto'
   },
 
@@ -421,15 +421,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const user = get().user
     const profile = get().profile
     if (!user || !profile) throw new Error('No hay sesión')
-    if (!profile.personas.includes(key)) throw new Error('Perfil no disponible en esta cuenta')
+    const norm = normalizeMemberKey(key)
+    const persona: PersonaKey = norm && isPersonaKey(norm) ? norm : key
+    if (!profile.personas.includes(persona)) throw new Error('Perfil no disponible en esta cuenta')
 
-    saveLocalActivePersona(user.uid, key)
+    saveLocalActivePersona(user.uid, persona)
     markPickerDone(user.uid)
 
     const next = buildActiveProfile(
       user.uid,
       profile.email,
-      key,
+      persona,
       profile.personas,
       profile.personaSettings,
       Date.now(),
@@ -437,8 +439,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     await setDoc(
       doc(getDb(), 'familia_users', user.uid),
       {
-        memberKey: key,
-        activeMemberKey: key,
+        memberKey: persona,
+        activeMemberKey: persona,
         role: next.role,
         displayName: next.displayName,
         reminderLeadMinutes: next.reminderLeadMinutes,
@@ -449,22 +451,22 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ profile: next, needsPersonaPick: false })
   },
 
-  addHellenPersona: async () => {
+  addTeoPersona: async () => {
     const user = get().user
     const profile = get().profile
     if (!user || !profile) throw new Error('No hay sesión')
-    if (profile.personas.includes('hellen')) return
+    if (profile.personas.includes('teo')) return
     if (!profile.personas.includes('lore') && profile.memberKey !== 'lore') {
-      throw new Error('Solo la cuenta de Lore puede añadir el perfil Hellen.')
+      throw new Error('Solo la cuenta de Lore puede añadir el perfil Teo.')
     }
 
-    const personas: PersonaKey[] = [...new Set<PersonaKey>([...profile.personas, 'lore', 'hellen'])]
+    const personas: PersonaKey[] = [...new Set<PersonaKey>([...profile.personas, 'lore', 'teo'])]
     const personaSettings = {
       ...profile.personaSettings,
       lore: profile.personaSettings.lore || defaultPersonaSettings(profile.reminderLeadMinutes),
-      hellen: defaultPersonaSettings(),
+      teo: defaultPersonaSettings(),
     }
-    const active = (profile.memberKey === 'hellen' ? 'hellen' : 'lore') as PersonaKey
+    const active = (profile.memberKey === 'teo' ? 'teo' : 'lore') as PersonaKey
     const next = buildActiveProfile(
       user.uid,
       profile.email,
@@ -487,9 +489,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       },
       { merge: true },
     )
-    // Force picker so they can switch to Hellen
     clearPickerDone(user.uid)
     set({ profile: next, needsPersonaPick: true })
+  },
+
+  addHellenPersona: async () => {
+    await get().addTeoPersona()
   },
 
   updateReminderLeadMinutes: async (minutes) => {
@@ -497,7 +502,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const profile = get().profile
     if (!user || !profile) throw new Error('No hay sesión')
     const reminderLeadMinutes = normalizeReminderLeadMinutes(minutes)
-    const key = profile.memberKey as PersonaKey
+    const keyNorm = normalizeMemberKey(profile.memberKey)
+    const key: PersonaKey =
+      keyNorm && isPersonaKey(keyNorm) ? keyNorm : (profile.memberKey as PersonaKey)
     const personaSettings = {
       ...profile.personaSettings,
       [key]: { reminderLeadMinutes },

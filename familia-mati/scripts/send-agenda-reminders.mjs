@@ -113,32 +113,33 @@ function eventUtcMs(dateStr, timeStr, timeZone) {
   return Date.UTC(y, m - 1, d, hh, mm, 0)
 }
 
-const HOUSEHOLD = new Set(['sebas', 'lore', 'hellen'])
+const HOUSEHOLD = new Set(['sebas', 'lore', 'teo'])
 
-/** Normalize assignee / para → sebas|lore|hellen|todos|null */
+/** Normalize assignee / para → sebas|lore|teo|todos|null (legacy hellen|hija → teo) */
 function normalizeAssignee(raw) {
   const v = String(raw || '')
     .trim()
     .toLowerCase()
   if (!v) return null
   if (v === 'todos' || v === 'all' || v === 'everyone') return 'todos'
-  if (v === 'hija') return 'hellen'
+  if (v === 'hija' || v === 'hellen') return 'teo'
   if (HOUSEHOLD.has(v)) return v
   return null
 }
 
 /**
  * Privacy: only matching people get the push.
- * - todos → every subscribed household member (sebas/lore/hellen)
- * - sebas|lore|hellen → only that memberKey (never the others)
+ * - todos → every subscribed household member (sebas/lore/teo)
+ * - sebas|lore|teo → only that memberKey (never the others)
+ * Legacy push docs with memberKey hellen match teo assignees.
  */
 function recipientsForItem(item, subs) {
   const who = normalizeAssignee(item.assignee ?? item.para)
   if (!who) return []
   if (who === 'todos') {
-    return subs.filter((s) => HOUSEHOLD.has(String(s.memberKey || '')))
+    return subs.filter((s) => HOUSEHOLD.has(normalizeAssignee(s.memberKey) || ''))
   }
-  return subs.filter((s) => String(s.memberKey || '') === who)
+  return subs.filter((s) => normalizeAssignee(s.memberKey) === who)
 }
 
 function inLeadWindow(now, eventAt, leadMinutes, windowMs) {
@@ -249,7 +250,7 @@ async function main() {
         s.endpoint &&
         s.keys?.p256dh &&
         s.keys?.auth &&
-        HOUSEHOLD.has(String(s.memberKey || '')),
+        HOUSEHOLD.has(normalizeAssignee(s.memberKey) || ''),
     )
 
   let sent = 0
