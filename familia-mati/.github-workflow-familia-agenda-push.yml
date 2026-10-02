@@ -1,10 +1,16 @@
-# Closed-app Web Push for Familia Mati agenda (~2h before citas/compromisos).
-# Requires repo secrets (never commit): FIREBASE_SERVICE_ACCOUNT_JSON, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY
+# Closed-app mobile Web Push for Familia Mati (NOT email).
+# Fires ~every 15 min; sender uses per-profile leadMinutes + assignee targeting.
+#
+# Required repo secrets (Settings → Secrets and variables → Actions):
+#   FIREBASE_SERVICE_ACCOUNT_JSON  — full JSON of a Firebase Admin SDK service account
+#   VAPID_PUBLIC_KEY               — same public key as VITE_VAPID_PUBLIC_KEY in the client build
+#   VAPID_PRIVATE_KEY              — matching private key (never in the client or docs)
+# Optional:
+#   VAPID_SUBJECT                  — e.g. mailto:you@example.com
 name: Familia agenda push reminders
 
 on:
   schedule:
-    # Every 15 minutes
     - cron: '*/15 * * * *'
   workflow_dispatch:
 
