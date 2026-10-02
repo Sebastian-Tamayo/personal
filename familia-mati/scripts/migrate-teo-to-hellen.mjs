@@ -85,21 +85,20 @@ async function migrateUsers(db) {
     if (ps[LEGACY] && !ps.hellen) ps.hellen = ps[LEGACY]
     delete ps[LEGACY]
 
-    await doc.ref.set(
-      {
-        email: nextEmail || d.email || '',
-        memberKey: active,
-        activeMemberKey: active,
-        personas: nextPersonas,
-        personaSettings: ps,
-        displayName,
-        role,
-        updatedAt: Date.now(),
-        migratedTeoToHellen: true,
-        migratedHellenEmail: isHellenEmail(email) ? HELLEN_EMAIL : undefined,
-      },
-      { merge: true },
-    )
+    const patch = {
+      email: nextEmail || d.email || '',
+      memberKey: active,
+      activeMemberKey: active,
+      personas: nextPersonas,
+      personaSettings: ps,
+      displayName,
+      role,
+      updatedAt: Date.now(),
+      migratedTeoToHellen: true,
+    }
+    if (isHellenEmail(email)) patch.migratedHellenEmail = HELLEN_EMAIL
+
+    await doc.ref.set(patch, { merge: true })
     updated++
     console.log('users', doc.id, email, '→', active, displayName, nextEmail)
   }
