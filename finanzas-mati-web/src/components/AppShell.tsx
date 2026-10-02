@@ -25,6 +25,8 @@ export function AppShell({ children, title }: { children: ReactNode; title?: str
           {user ? (
             <a
               href={FAMILIA_URL}
+              target="_blank"
+              rel="noopener noreferrer"
               className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-[var(--accent-deep)] underline-offset-2 hover:underline"
             >
               <Home className="size-3.5" />

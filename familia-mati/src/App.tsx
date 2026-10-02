@@ -9,12 +9,25 @@ export default function App() {
   const init = useAuthStore((s) => s.init)
 
   useEffect(() => {
+    // Restaura ruta de GitHub Pages (404 → index?p=...)
     const params = new URLSearchParams(window.location.search)
     const redirect = params.get('p')
     if (redirect) {
       params.delete('p')
       const rest = params.toString()
-      window.history.replaceState(null, '', redirect + (rest ? `?${rest}` : '') + window.location.hash)
+      const base = (import.meta.env.BASE_URL || '/').replace(/\/$/, '') || ''
+      let path = redirect
+      // Accept absolute (/personal/familia/login) or app-relative (/login)
+      if (base && (path === base || path.startsWith(base + '/'))) {
+        path = path.slice(base.length) || '/'
+      }
+      if (!path.startsWith('/')) path = '/' + path
+      while (path.startsWith('//')) path = path.slice(1)
+      window.history.replaceState(
+        null,
+        '',
+        base + path + (rest ? `?${rest}` : '') + window.location.hash,
+      )
     }
   }, [])
 

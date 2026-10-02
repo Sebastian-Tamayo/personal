@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Familia Mati</title>
+    <script>
+      // SPA fallback when GitHub Pages serves this file for missing familia routes.
+      ;(function () {
+        var base = '/personal/familia'
+        var rest = location.pathname.indexOf(base) === 0 ? location.pathname.slice(base.length) || '/' : '/'
+        location.replace(
+          location.origin +
+            base +
+            '/?p=' +
+            encodeURIComponent(rest) +
+            (location.search ? location.search.replace(/^\?/, '&') : '') +
+            location.hash,
+        )
+      })()
+    </script>
+  </head>
+  <body></body>
+</html>

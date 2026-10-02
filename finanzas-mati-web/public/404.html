@@ -2,18 +2,39 @@
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
-    <title>Finanzas Mati</title>
+    <title>Redirect…</title>
     <script>
-      // Fallback SPA para GitHub Pages: reenvía la ruta al index.
-      var path = location.pathname.split('/').slice(1).join('/')
-      location.replace(
-        location.origin +
-          location.pathname.replace(/\/[^/]*$/, '/') +
-          '?p=/' +
-          encodeURIComponent('/' + path) +
-          location.search.replace(/^\?/, '&') +
-          location.hash
-      )
+      // SPA fallback for GitHub Pages (project site under /personal/).
+      // Familia Mati is a nested SPA — send those paths to its own index.
+      ;(function () {
+        var origin = location.origin
+        var pathname = location.pathname
+        var search = location.search
+        var hash = location.hash
+        var familiaBase = '/personal/familia'
+        if (pathname === familiaBase || pathname.indexOf(familiaBase + '/') === 0) {
+          var rest = pathname.slice(familiaBase.length) || '/'
+          location.replace(
+            origin +
+              familiaBase +
+              '/?p=' +
+              encodeURIComponent(rest) +
+              (search ? search.replace(/^\?/, '&') : '') +
+              hash,
+          )
+          return
+        }
+        // Finanzas (root of /personal/)
+        var segs = pathname.split('/').filter(Boolean)
+        // drop last segment (missing file) → parent dir index
+        var parent = '/' + segs.slice(0, -1).join('/')
+        if (!parent.endsWith('/')) parent += '/'
+        var route = '/' + segs.slice(1).join('/') // strip "personal"
+        if (route === '/') route = '/'
+        location.replace(
+          origin + parent + '?p=' + encodeURIComponent(route) + (search ? search.replace(/^\?/, '&') : '') + hash,
+        )
+      })()
     </script>
   </head>
   <body></body>
