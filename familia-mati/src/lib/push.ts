@@ -74,18 +74,34 @@ export type PushStatus =
   | 'subscribed'
   | 'unsubscribed'
 
+async function getServiceWorkerRegistration(timeoutMs = 4000): Promise<ServiceWorkerRegistration | null> {
+  if (!('serviceWorker' in navigator)) return null
+  try {
+    const ready = navigator.serviceWorker.ready
+    const timed = new Promise<null>((resolve) => {
+      window.setTimeout(() => resolve(null), timeoutMs)
+    })
+    return (await Promise.race([ready, timed])) as ServiceWorkerRegistration | null
+  } catch {
+    return null
+  }
+}
+
 /** True when this browser/device is fully opted in (permission + live subscription). */
 export async function isThisDevicePushActive(): Promise<boolean> {
   if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) {
     return false
   }
   if (Notification.permission !== 'granted') return false
+  if (isPushEnabledLocally()) {
+    // Local success flag: don't nag even if SW is still waking up
+    return true
+  }
   try {
-    const reg = await navigator.serviceWorker.ready
+    const reg = await getServiceWorkerRegistration()
+    if (!reg) return false
     const sub = await reg.pushManager.getSubscription()
     if (!sub?.endpoint) return false
-    if (isPushEnabledLocally()) return true
-    // Recover local flag if subscription already exists on this device
     markPushEnabledLocally(sub.endpoint)
     return true
   } catch {
@@ -100,21 +116,24 @@ export async function getPushStatus(uid?: string | null): Promise<PushStatus> {
   if (!VAPID_PUBLIC) return 'missing-vapid'
   if (Notification.permission === 'denied') return 'denied'
 
+  if (isPushEnabledLocally() && Notification.permission === 'granted') {
+    return 'subscribed'
+  }
+
   try {
-    const reg = await navigator.serviceWorker.ready
-    const sub = await reg.pushManager.getSubscription()
-    if (Notification.permission === 'granted' && sub?.endpoint) {
-      markPushEnabledLocally(sub.endpoint)
-      return 'subscribed'
+    const reg = await getServiceWorkerRegistration()
+    if (reg) {
+      const sub = await reg.pushManager.getSubscription()
+      if (Notification.permission === 'granted' && sub?.endpoint) {
+        markPushEnabledLocally(sub.endpoint)
+        return 'subscribed'
+      }
     }
   } catch {
     /* ignore */
   }
 
-  if (uid && isPushEnabledLocally() && Notification.permission === 'granted') {
-    return 'subscribed'
-  }
-
+  void uid
   return Notification.permission === 'granted' ? 'unsubscribed' : 'default'
 }
 
