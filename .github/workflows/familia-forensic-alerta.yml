@@ -1,0 +1,30 @@
+name: Familia forensic alerta
+on:
+  workflow_dispatch:
+    inputs:
+      send:
+        description: 'Also send catch-up pushes (1/0)'
+        required: false
+        default: '1'
+jobs:
+  forensic:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install
+        working-directory: familia-mati
+        run: npm install --no-save firebase-admin@13 web-push@3.6.7
+      - name: Forensic dump + optional send
+        working-directory: familia-mati
+        env:
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+          VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT }}
+          REMINDER_TZ: Europe/Madrid
+          REMINDER_WINDOW_MINUTES: '45'
+          FORENSIC_SEND: ${{ github.event.inputs.send }}
+        run: node scripts/forensic-alerta.mjs
