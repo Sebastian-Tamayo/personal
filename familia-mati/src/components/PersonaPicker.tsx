@@ -3,7 +3,7 @@ import { memberByKey, type PersonaKey } from '../lib/family'
 import { useAuthStore } from '../store/authStore'
 
 /**
- * Full-screen / card picker after login on shared Lore+Teo Auth account (legacy dual).
+ * Full-screen / card picker after login on shared Lore+Hellen Auth account (legacy dual).
  */
 export function PersonaPickerModal() {
   const profile = useAuthStore((s) => s.profile)
@@ -11,7 +11,7 @@ export function PersonaPickerModal() {
   const setActivePersona = useAuthStore((s) => s.setActivePersona)
 
   if (!needsPersonaPick || !profile) return null
-  const dual = profile.personas.filter((p) => p === 'lore' || p === 'teo')
+  const dual = profile.personas.filter((p) => p === 'lore' || p === 'hellen')
   if (dual.length < 2) return null
 
   return (
@@ -62,21 +62,21 @@ export function PersonaPickerModal() {
 export function PersonaSwitcher() {
   const profile = useAuthStore((s) => s.profile)
   const setActivePersona = useAuthStore((s) => s.setActivePersona)
-  const addTeoPersona = useAuthStore((s) => s.addTeoPersona)
+  const addHellenPersona = useAuthStore((s) => s.addHellenPersona)
 
   if (!profile) return null
-  const dual = profile.personas.includes('lore') && profile.personas.includes('teo')
-  const canAddTeo =
+  const dual = profile.personas.includes('lore') && profile.personas.includes('hellen')
+  const canAddHellen =
     (profile.personas.includes('lore') || profile.memberKey === 'lore') &&
-    !profile.personas.includes('teo')
+    !profile.personas.includes('hellen')
 
-  if (!dual && !canAddTeo) return null
+  if (!dual && !canAddHellen) return null
 
   return (
     <div className="mt-2" data-testid="persona-switcher">
       {dual ? (
         <div className="flex gap-2 rounded-xl bg-black/5 p-1">
-          {(['lore', 'teo'] as const).map((key) => {
+          {(['lore', 'hellen'] as const).map((key) => {
             const m = memberByKey(key)!
             const active = profile.memberKey === key
             return (
@@ -100,14 +100,14 @@ export function PersonaSwitcher() {
             )
           })}
         </div>
-      ) : canAddTeo ? (
+      ) : canAddHellen ? (
         <button
           type="button"
-          data-testid="add-teo-persona"
-          onClick={() => void addTeoPersona()}
+          data-testid="add-hellen-persona"
+          onClick={() => void addHellenPersona()}
           className="w-full rounded-xl border border-dashed border-[#6d28d9]/50 bg-[#ede9fe]/60 px-3 py-2 text-xs font-bold text-[#6d28d9]"
         >
-          + Añadir perfil Teo (mismo correo)
+          + Añadir perfil Hellen (mismo correo)
         </button>
       ) : null}
     </div>

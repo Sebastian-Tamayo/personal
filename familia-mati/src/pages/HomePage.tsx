@@ -19,7 +19,7 @@ import { useOrgStore } from '../store/orgStore'
 
 type AgendaTab = 'hoy' | 'proximos'
 
-const HOUSEHOLD = FAMILY_MEMBERS.filter((m) => m.key === 'sebas' || m.key === 'lore' || m.key === 'teo')
+const HOUSEHOLD = FAMILY_MEMBERS.filter((m) => m.key === 'sebas' || m.key === 'lore' || m.key === 'hellen')
 
 export function HomePage() {
   const user = useAuthStore((s) => s.user)!
@@ -243,7 +243,7 @@ export function HomePage() {
             Tareas diarias · En casa
           </h2>
           <p className="mt-0.5 text-xs font-semibold text-[#a16207]">
-            Barrer, aspirar, comida… para Sebas, Lore y Teo · {dailyPending} pendientes ·{' '}
+            Barrer, aspirar, comida… para Sebas, Lore y Hellen · {dailyPending} pendientes ·{' '}
             {dailyDone} hechas
           </p>
         </div>

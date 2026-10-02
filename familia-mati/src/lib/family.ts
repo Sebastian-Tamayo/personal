@@ -1,4 +1,4 @@
-export type MemberKey = 'sebas' | 'lore' | 'teo' | 'bebe'
+export type MemberKey = 'sebas' | 'lore' | 'hellen' | 'bebe'
 export type UserRole = 'adulto' | 'hijo'
 export type ItemKind = 'cita' | 'tarea' | 'chore' | 'bebe'
 export type ItemStatus = 'pendiente' | 'hecha'
@@ -14,7 +14,7 @@ export interface FamilyMember {
   canLogin: boolean
 }
 
-/** 4 visual profiles; 3 can log in (Sebas, Lore, Teo). Baby = visual only. */
+/** 4 visual profiles; 3 can log in (Sebas, Lore, Hellen). Baby = visual only. */
 export const FAMILY_MEMBERS: FamilyMember[] = [
   {
     key: 'sebas',
@@ -37,9 +37,9 @@ export const FAMILY_MEMBERS: FamilyMember[] = [
     canLogin: true,
   },
   {
-    key: 'teo',
-    name: 'Teo',
-    short: 'T',
+    key: 'hellen',
+    name: 'Hellen',
+    short: 'He',
     role: 'hijo',
     color: '#6d28d9',
     colorSoft: '#ddd6fe',
@@ -60,14 +60,15 @@ export const FAMILY_MEMBERS: FamilyMember[] = [
 
 /**
  * Normalize assignee / persona keys.
- * Legacy: hija → teo, hellen → teo (profile label is Teo; app brand stays Familia Hellen y Mati).
+ * Canonical daughter key: hellen. Legacy teo|hija → hellen.
+ * App brand stays Familia Hellen y Mati.
  */
 export function normalizeMemberKey(key: string | null | undefined): MemberKey | 'todos' | null {
   if (!key) return null
   const k = String(key).trim().toLowerCase()
   if (k === 'todos') return 'todos'
-  if (k === 'hija' || k === 'hellen') return 'teo'
-  if (k === 'sebas' || k === 'lore' || k === 'teo' || k === 'bebe') return k
+  if (k === 'hija' || k === 'teo') return 'hellen'
+  if (k === 'sebas' || k === 'lore' || k === 'hellen' || k === 'bebe') return k
   return null
 }
 
@@ -78,8 +79,7 @@ export function memberByKey(key: string | null | undefined): FamilyMember | unde
 }
 
 /**
- * UI label for a persona. Never shows legacy “Hellen” as the person name
- * (app brand “Familia Hellen y Mati” is separate).
+ * UI label for a persona. Never shows legacy “Teo” as the person name.
  */
 export function resolveMemberLabel(
   memberKey: string | null | undefined,
@@ -88,7 +88,7 @@ export function resolveMemberLabel(
   const m = memberByKey(memberKey)
   if (m) return m.name
   const raw = String(displayName || '').trim()
-  if (!raw || /^hellen$/i.test(raw) || /^hija$/i.test(raw)) return 'Teo'
+  if (!raw || /^teo$/i.test(raw) || /^hija$/i.test(raw)) return 'Hellen'
   return raw
 }
 
@@ -136,8 +136,8 @@ export function formatLeadLabel(minutes: number): string {
   return preset?.label || `${minutes} min`
 }
 
-/** Login personas available on one Auth account (legacy Lore+Teo share email). */
-export type PersonaKey = 'sebas' | 'lore' | 'teo'
+/** Login personas available on one Auth account (legacy Lore+Hellen share email). */
+export type PersonaKey = 'sebas' | 'lore' | 'hellen'
 
 export interface PersonaSettings {
   reminderLeadMinutes: number
@@ -152,7 +152,7 @@ export interface UserProfile {
   displayName: string
   /** Minutes before event for the active persona. */
   reminderLeadMinutes: number
-  /** Personas linked to this Auth uid (e.g. lore+teo). */
+  /** Personas linked to this Auth uid (e.g. lore+hellen). */
   personas: PersonaKey[]
   /** Per-persona settings (lead time, etc.). */
   personaSettings: Partial<Record<PersonaKey, PersonaSettings>>
@@ -161,23 +161,23 @@ export interface UserProfile {
 
 export function isPersonaKey(k: string | null | undefined): k is PersonaKey {
   const n = normalizeMemberKey(k)
-  return n === 'sebas' || n === 'lore' || n === 'teo'
+  return n === 'sebas' || n === 'lore' || n === 'hellen'
 }
 
-/** Dedicated Teo Auth emails (own account — not Lore’s shared dual-profile). */
-export const TEO_OWN_EMAILS = ['teodoro31@gmail.com'] as const
-/** @deprecated use TEO_OWN_EMAILS */
-export const HELLEN_OWN_EMAILS = TEO_OWN_EMAILS
+/** Dedicated Hellen Auth emails (own account — not Lore’s shared dual-profile). */
+export const HELLEN_OWN_EMAILS = ['teodoro31@gmail.com'] as const
+/** @deprecated alias */
+export const TEO_OWN_EMAILS = HELLEN_OWN_EMAILS
 
-export function isTeoOwnEmail(email: string | null | undefined): boolean {
+export function isHellenOwnEmail(email: string | null | undefined): boolean {
   const e = String(email || '')
     .trim()
     .toLowerCase()
-  return TEO_OWN_EMAILS.includes(e as (typeof TEO_OWN_EMAILS)[number])
+  return HELLEN_OWN_EMAILS.includes(e as (typeof HELLEN_OWN_EMAILS)[number])
 }
 
-/** @deprecated use isTeoOwnEmail */
-export const isHellenOwnEmail = isTeoOwnEmail
+/** @deprecated use isHellenOwnEmail */
+export const isTeoOwnEmail = isHellenOwnEmail
 
 export function defaultPersonaSettings(
   lead: number = DEFAULT_REMINDER_LEAD_MINUTES,

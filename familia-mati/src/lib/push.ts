@@ -126,12 +126,12 @@ async function getServiceWorkerRegistration(timeoutMs = 4000): Promise<ServiceWo
 
 /**
  * True when THIS persona (memberKey) on this Auth account enabled push on this browser.
- * Lore enabling does not hide Teo's Activar avisos (and vice versa).
- * Legacy memberKey `hellen` matches `teo`.
+ * Lore enabling does not hide Hellen's Activar avisos (and vice versa).
+ * Legacy memberKey `teo` matches `hellen`.
  */
 function memberKeysMatch(a: string, b: string): boolean {
-  const na = a === 'hellen' || a === 'hija' ? 'teo' : a
-  const nb = b === 'hellen' || b === 'hija' ? 'teo' : b
+  const na = a === 'teo' || a === 'hija' ? 'hellen' : a
+  const nb = b === 'teo' || b === 'hija' ? 'hellen' : b
   return na === nb
 }
 
@@ -143,8 +143,8 @@ export async function isThisUserPushActive(uid: string, memberKey: string): Prom
   if (Notification.permission !== 'granted') return false
 
   if (isPushEnabledLocally(uid, memberKey)) return true
-  // Legacy local key when profile migrated hellen → teo
-  if (memberKey === 'teo' && isPushEnabledLocally(uid, 'hellen')) return true
+  // Legacy local key when profile migrated teo → hellen
+  if (memberKey === 'hellen' && isPushEnabledLocally(uid, 'teo')) return true
 
   try {
     const reg = await getServiceWorkerRegistration()
@@ -165,10 +165,10 @@ export async function isThisUserPushActive(uid: string, memberKey: string): Prom
         return true
       }
     }
-    // Persona-scoped mirror doc (teo + legacy hellen)
+    // Persona-scoped mirror doc (hellen + legacy teo)
     const personaIds =
-      memberKey === 'teo'
-        ? [`${uid}_teo`, `${uid}_hellen`]
+      memberKey === 'hellen'
+        ? [`${uid}_hellen`, `${uid}_teo`]
         : [`${uid}_${memberKey}`]
     for (const pid of personaIds) {
       const personaDoc = await getDoc(doc(getDb(), 'familia_push_subs', pid))
@@ -235,7 +235,7 @@ export async function enablePushNotifications(uid: string, memberKey: string): P
   // Device endpoint doc — current active persona owns delivery on this phone
   await setDoc(doc(getDb(), 'familia_push_subs', deviceId), payload, { merge: true })
 
-  // Per-persona mirror so Lore/Teo each keep an "enabled" record on shared Auth
+  // Per-persona mirror so Lore/Hellen each keep an "enabled" record on shared Auth
   await setDoc(doc(getDb(), 'familia_push_subs', `${uid}_${memberKey}`), {
     ...payload,
     personaMirror: true,

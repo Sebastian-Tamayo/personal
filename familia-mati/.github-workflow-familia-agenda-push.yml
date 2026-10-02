@@ -27,11 +27,11 @@ jobs:
           node-version: '22'
       - name: Install sender deps
         run: npm install --no-save firebase-admin@13 web-push@3.6.7
-      - name: Migrate hellen → teo profiles
+      - name: Migrate teo → hellen profiles
         continue-on-error: true
         env:
           FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
-        run: node scripts/migrate-hellen-to-teo.mjs
+        run: node scripts/migrate-teo-to-hellen.mjs
       - name: Send due reminders
         continue-on-error: true
         env:

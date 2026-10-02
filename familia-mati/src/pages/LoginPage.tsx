@@ -4,7 +4,7 @@ import { AppShell } from '../components/AppShell'
 import { type MemberKey } from '../lib/family'
 import { useAuthStore } from '../store/authStore'
 
-type RegisterChoice = 'sebas' | 'lore' | 'teo' | 'lore_teo'
+type RegisterChoice = 'sebas' | 'lore' | 'hellen' | 'lore_hellen'
 
 export function LoginPage() {
   const user = useAuthStore((s) => s.user)
@@ -33,9 +33,9 @@ export function LoginPage() {
       if (mode === 'login') await login(email, password)
       else {
         const memberKey: MemberKey =
-          choice === 'sebas' ? 'sebas' : choice === 'teo' ? 'teo' : 'lore'
+          choice === 'sebas' ? 'sebas' : choice === 'hellen' ? 'hellen' : 'lore'
         await register(email, password, memberKey, {
-          linkTeo: choice === 'lore_teo',
+          linkHellen: choice === 'lore_hellen',
         })
       }
     } catch {
@@ -70,16 +70,16 @@ export function LoginPage() {
       soft: '#fbcfe8',
     },
     {
-      id: 'teo',
-      label: 'Teo',
+      id: 'hellen',
+      label: 'Hellen',
       emoji: '🟣',
-      hint: 'Correo de Teo (Oppo) · Teodoro31@gmail.com',
+      hint: 'Correo de Hellen (Oppo) · Teodoro31@gmail.com',
       color: '#6d28d9',
       soft: '#ddd6fe',
     },
     {
-      id: 'lore_teo',
-      label: 'Lore+Teo',
+      id: 'lore_hellen',
+      label: 'Lore+He',
       emoji: '🩷🟣',
       hint: 'Legacy: 2 perfiles en correo de Lore',
       color: '#9d174d',
@@ -88,7 +88,7 @@ export function LoginPage() {
   ]
 
   return (
-    <AppShell title="Organización diaria · Sebas, Lore y Teo">
+    <AppShell title="Organización diaria · Sebas, Lore y Hellen">
       {!configured ? (
         <section className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-5 shadow-[var(--shadow)]">
           <h2 className="mb-2 text-lg font-bold">Firebase no configurado</h2>
@@ -140,14 +140,14 @@ export function LoginPage() {
                   ))}
                 </div>
                 <p className="mt-2 text-xs leading-snug text-[var(--ink-soft)]">
-                  {chips.find((c) => c.id === choice)?.hint}. Teo entra con{' '}
+                  {chips.find((c) => c.id === choice)?.hint}. Hellen entra con{' '}
                   <span className="font-bold">su propio correo</span> (cuenta hijo · sin Finanzas).
                   Lore tiene su perfil adulto; la app se llama Familia Hellen y Mati.
                 </p>
               </div>
             ) : (
               <p className="rounded-xl bg-[#f5f3ff] px-3 py-2 text-xs font-semibold text-[#5b21b6]">
-                Teo (Oppo): Teodoro31@gmail.com. Lore: su correo. Sebas: el suyo. Avisos = push al
+                Hellen (Oppo): Teodoro31@gmail.com. Lore: su correo. Sebas: el suyo. Avisos = push al
                 móvil, no email.
               </p>
             )}

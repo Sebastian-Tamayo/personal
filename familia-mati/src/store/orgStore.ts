@@ -53,11 +53,11 @@ function mapItem(id: string, data: Record<string, unknown>): OrgItem {
   const rawAssignee = String(data.assignee ?? 'todos')
   let assignee: MemberKey | 'todos' = 'todos'
   if (rawAssignee === 'todos') assignee = 'todos'
-  else if (rawAssignee === 'hija' || rawAssignee === 'hellen') assignee = 'teo'
+  else if (rawAssignee === 'hija' || rawAssignee === 'teo') assignee = 'hellen'
   else if (
     rawAssignee === 'sebas' ||
     rawAssignee === 'lore' ||
-    rawAssignee === 'teo' ||
+    rawAssignee === 'hellen' ||
     rawAssignee === 'bebe'
   ) {
     assignee = rawAssignee

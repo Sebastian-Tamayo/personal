@@ -113,25 +113,25 @@ function eventUtcMs(dateStr, timeStr, timeZone) {
   return Date.UTC(y, m - 1, d, hh, mm, 0)
 }
 
-const HOUSEHOLD = new Set(['sebas', 'lore', 'teo'])
+const HOUSEHOLD = new Set(['sebas', 'lore', 'hellen'])
 
-/** Normalize assignee / para → sebas|lore|teo|todos|null (legacy hellen|hija → teo) */
+/** Normalize assignee / para → sebas|lore|hellen|todos|null (legacy teo|hija → hellen) */
 function normalizeAssignee(raw) {
   const v = String(raw || '')
     .trim()
     .toLowerCase()
   if (!v) return null
   if (v === 'todos' || v === 'all' || v === 'everyone') return 'todos'
-  if (v === 'hija' || v === 'hellen') return 'teo'
+  if (v === 'hija' || v === 'teo') return 'hellen'
   if (HOUSEHOLD.has(v)) return v
   return null
 }
 
 /**
  * Privacy: only matching people get the push.
- * - todos → every subscribed household member (sebas/lore/teo)
- * - sebas|lore|teo → only that memberKey (never the others)
- * Legacy push docs with memberKey hellen match teo assignees.
+ * - todos → every subscribed household member (sebas/lore/hellen)
+ * - sebas|lore|hellen → only that memberKey (never the others)
+ * Legacy push docs with memberKey teo match hellen assignees.
  */
 function recipientsForItem(item, subs) {
   const who = normalizeAssignee(item.assignee ?? item.para)

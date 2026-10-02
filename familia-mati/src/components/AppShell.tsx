@@ -6,11 +6,11 @@ import { useAuthStore } from '../store/authStore'
 import { FinanzasPinModal, isFinanzasUnlocked } from './FinanzasPinModal'
 import { PersonaPickerModal, PersonaSwitcher } from './PersonaPicker'
 
-/** Adults only based on ACTIVE persona (Sebas/Lore). Teo never — even on shared email. */
+/** Adults only based on ACTIVE persona (Sebas/Lore). Hellen never — even on shared email. */
 function canSeeFinanzas(profile: { role: string; memberKey: string } | null): boolean {
   if (!profile) return false
-  const key = profile.memberKey === 'hellen' ? 'teo' : profile.memberKey
-  if (key === 'teo') return false
+  const key = profile.memberKey === 'teo' ? 'hellen' : profile.memberKey
+  if (key === 'hellen') return false
   if (profile.role === 'hijo') return false
   return profile.role === 'adulto' || key === 'sebas' || key === 'lore'
 }
