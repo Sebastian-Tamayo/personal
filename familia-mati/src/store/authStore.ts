@@ -10,6 +10,7 @@ import { create } from 'zustand'
 import {
   DEFAULT_REMINDER_LEAD_MINUTES,
   defaultPersonaSettings,
+  isHellenOwnEmail,
   isPersonaKey,
   memberByKey,
   normalizeMemberKey,
@@ -171,6 +172,43 @@ async function loadOrCreateProfile(
 
   if (snap.exists()) {
     const d = snap.data()
+    const emailLower = String(d.email || email || '').trim()
+
+    // Dedicated Hellen Auth account → always hellen-only (never Lore dual picker)
+    if (isHellenOwnEmail(emailLower) || isHellenOwnEmail(email)) {
+      const personas: PersonaKey[] = ['hellen']
+      const legacyLead = normalizeReminderLeadMinutes(
+        d.reminderLeadMinutes ?? DEFAULT_REMINDER_LEAD_MINUTES,
+      )
+      const personaSettings = parsePersonaSettings(d.personaSettings, personas, legacyLead)
+      const profile = buildActiveProfile(
+        user.uid,
+        emailLower || email,
+        'hellen',
+        personas,
+        personaSettings,
+        Number(d.updatedAt) || Date.now(),
+      )
+      await setDoc(
+        ref,
+        {
+          uid: user.uid,
+          email: profile.email,
+          memberKey: 'hellen',
+          activeMemberKey: 'hellen',
+          personas,
+          personaSettings,
+          role: 'hijo',
+          displayName: 'Hellen',
+          reminderLeadMinutes: profile.reminderLeadMinutes,
+          updatedAt: Date.now(),
+        },
+        { merge: true },
+      )
+      markPickerDone(user.uid)
+      return { profile, needsPersonaPick: false }
+    }
+
     const rawKey = String(d.memberKey || d.activeMemberKey || 'sebas')
     const normalized = normalizeMemberKey(rawKey === 'hija' ? 'hellen' : rawKey)
     const fallbackKey: PersonaKey =
@@ -180,7 +218,7 @@ async function loadOrCreateProfile(
     // Migrate: lore-only account can later add hellen
     if (fallbackKey === 'lore' && !personas.includes('lore')) personas = ['lore', ...personas]
     if (fallbackKey === 'hellen' && personas.length === 1 && personas[0] === 'hellen') {
-      // Old hellen-only Auth (separate email) — keep as single persona
+      // Hellen-only Auth — keep as single persona
     }
 
     const legacyLead = normalizeReminderLeadMinutes(
@@ -231,6 +269,34 @@ async function loadOrCreateProfile(
   }
 
   // New account
+  // Dedicated Hellen email → always hellen profile
+  if (isHellenOwnEmail(email)) {
+    const personas: PersonaKey[] = ['hellen']
+    const personaSettings = parsePersonaSettings({}, personas, DEFAULT_REMINDER_LEAD_MINUTES)
+    const profile = buildActiveProfile(
+      user.uid,
+      email,
+      'hellen',
+      personas,
+      personaSettings,
+      Date.now(),
+    )
+    await setDoc(ref, {
+      uid: profile.uid,
+      email: profile.email,
+      memberKey: 'hellen',
+      activeMemberKey: 'hellen',
+      personas,
+      personaSettings,
+      role: 'hijo',
+      displayName: 'Hellen',
+      reminderLeadMinutes: profile.reminderLeadMinutes,
+      updatedAt: profile.updatedAt,
+    })
+    markPickerDone(user.uid)
+    return { profile, needsPersonaPick: false }
+  }
+
   let key: PersonaKey =
     memberKey && isPersonaKey(memberKey) ? memberKey : 'sebas'
   if (key === 'hellen' && opts?.linkHellen) {

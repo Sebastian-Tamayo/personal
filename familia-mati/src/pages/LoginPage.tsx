@@ -4,7 +4,7 @@ import { AppShell } from '../components/AppShell'
 import { type MemberKey } from '../lib/family'
 import { useAuthStore } from '../store/authStore'
 
-type RegisterChoice = 'sebas' | 'lore' | 'lore_hellen'
+type RegisterChoice = 'sebas' | 'lore' | 'hellen' | 'lore_hellen'
 
 export function LoginPage() {
   const user = useAuthStore((s) => s.user)
@@ -33,7 +33,8 @@ export function LoginPage() {
     try {
       if (mode === 'login') await login(email, password)
       else {
-        const memberKey: MemberKey = choice === 'sebas' ? 'sebas' : 'lore'
+        const memberKey: MemberKey =
+          choice === 'sebas' ? 'sebas' : choice === 'hellen' ? 'hellen' : 'lore'
         await register(email, password, memberKey, {
           linkHellen: choice === 'lore_hellen',
         })
@@ -45,7 +46,14 @@ export function LoginPage() {
     }
   }
 
-  const chips: { id: RegisterChoice; label: string; emoji: string; hint: string; color: string; soft: string }[] = [
+  const chips: {
+    id: RegisterChoice
+    label: string
+    emoji: string
+    hint: string
+    color: string
+    soft: string
+  }[] = [
     {
       id: 'sebas',
       label: 'Sebas',
@@ -58,17 +66,25 @@ export function LoginPage() {
       id: 'lore',
       label: 'Lore',
       emoji: '🩷',
-      hint: 'Luego puedes añadir Hellen',
+      hint: 'Correo de Lore',
       color: '#be185d',
       soft: '#fbcfe8',
     },
     {
-      id: 'lore_hellen',
-      label: 'Lore + Hellen',
-      emoji: '🩷🟣',
-      hint: 'Mismo correo · 2 perfiles',
+      id: 'hellen',
+      label: 'Hellen',
+      emoji: '🟣',
+      hint: 'Su propio correo (Oppo)',
       color: '#6d28d9',
       soft: '#ddd6fe',
+    },
+    {
+      id: 'lore_hellen',
+      label: 'Lore+He',
+      emoji: '🩷🟣',
+      hint: 'Legacy: 2 perfiles en correo de Lore',
+      color: '#9d174d',
+      soft: '#fce7f3',
     },
   ]
 
@@ -106,7 +122,7 @@ export function LoginPage() {
             {mode === 'register' ? (
               <div>
                 <p className="mb-2 text-sm font-bold">Soy…</p>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                   {chips.map((c) => (
                     <button
                       key={c.id}
@@ -125,15 +141,15 @@ export function LoginPage() {
                   ))}
                 </div>
                 <p className="mt-2 text-xs leading-snug text-[var(--ink-soft)]">
-                  {chips.find((c) => c.id === choice)?.hint}. Firebase exige un email único: Lore y
-                  Hellen comparten el correo de Lore (2 perfiles). Sebas usa el suyo. El bebé no
-                  inicia sesión.
+                  {chips.find((c) => c.id === choice)?.hint}. Hellen entra con{' '}
+                  <span className="font-bold">su propio correo</span> (cuenta hijo · sin Finanzas).
+                  Lore puede seguir con dual-perfil en su correo si hace falta.
                 </p>
               </div>
             ) : (
-              <p className="rounded-xl bg-[#fdf2f8] px-3 py-2 text-xs font-semibold text-[#9d174d]">
-                Lore / Hellen: entra con el correo de Lore → elige perfil. Avisos se activan por
-                separado.
+              <p className="rounded-xl bg-[#f5f3ff] px-3 py-2 text-xs font-semibold text-[#5b21b6]">
+                Hellen (Oppo): entra con su correo. Lore: el suyo (selector si hay 2 perfiles). Sebas:
+                el suyo. Avisos = push al móvil, no email.
               </p>
             )}
 

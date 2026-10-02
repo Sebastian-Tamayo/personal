@@ -144,6 +144,16 @@ export function isPersonaKey(k: string | null | undefined): k is PersonaKey {
   return k === 'sebas' || k === 'lore' || k === 'hellen'
 }
 
+/** Dedicated Hellen Auth emails (own account — not Lore’s shared dual-profile). */
+export const HELLEN_OWN_EMAILS = ['teodoro31@gmail.com'] as const
+
+export function isHellenOwnEmail(email: string | null | undefined): boolean {
+  const e = String(email || '')
+    .trim()
+    .toLowerCase()
+  return HELLEN_OWN_EMAILS.includes(e as (typeof HELLEN_OWN_EMAILS)[number])
+}
+
 export function defaultPersonaSettings(
   lead: number = DEFAULT_REMINDER_LEAD_MINUTES,
 ): PersonaSettings {
