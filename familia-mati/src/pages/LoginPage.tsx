@@ -73,7 +73,7 @@ export function LoginPage() {
       id: 'hellen',
       label: 'Hellen',
       emoji: '🟣',
-      hint: 'Correo de Hellen (Oppo) · Teodoro31@gmail.com',
+      hint: 'Correo de Hellen (Oppo) · teodoroalvis31@gmail.com',
       color: '#6d28d9',
       soft: '#ddd6fe',
     },
@@ -147,7 +147,7 @@ export function LoginPage() {
               </div>
             ) : (
               <p className="rounded-xl bg-[#f5f3ff] px-3 py-2 text-xs font-semibold text-[#5b21b6]">
-                Hellen (Oppo): Teodoro31@gmail.com. Lore: su correo. Sebas: el suyo. Avisos = push al
+                Hellen (Oppo): teodoroalvis31@gmail.com. Lore: su correo. Sebas: el suyo. Avisos = push al
                 móvil, no email.
               </p>
             )}

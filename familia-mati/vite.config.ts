@@ -4,6 +4,9 @@ import { defineConfig } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
 // Nested under GitHub Pages: https://sebastian-tamayo.github.io/personal/familia/
+// Cache-bust bump: hellen-email-v3 (forces new SW precache / asset hashes)
+export const FAMILIA_PWA_CACHE_ID = 'familia-hellen-mati-v20261002c'
+
 export default defineConfig({
   base: '/personal/familia/',
   plugins: [
@@ -27,7 +30,7 @@ export default defineConfig({
         display: 'standalone',
         orientation: 'portrait-primary',
         lang: 'es',
-        start_url: '/personal/familia/',
+        start_url: '/personal/familia/?v=20261002c',
         scope: '/personal/familia/',
         icons: [
           { src: 'icons/pwa-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
@@ -41,6 +44,10 @@ export default defineConfig({
         ],
       },
       workbox: {
+        cacheId: FAMILIA_PWA_CACHE_ID,
+        cleanupOutdatedCaches: true,
+        skipWaiting: true,
+        clientsClaim: true,
         navigateFallback: '/personal/familia/index.html',
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         // Closed-app Web Push (push + notificationclick)

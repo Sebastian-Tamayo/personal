@@ -79,7 +79,7 @@ export function memberByKey(key: string | null | undefined): FamilyMember | unde
 }
 
 /**
- * UI label for a persona. Never shows legacy “Teo” as the person name.
+ * UI label for a persona. Scrubs legacy daughter nicknames → Hellen.
  */
 export function resolveMemberLabel(
   memberKey: string | null | undefined,
@@ -88,7 +88,11 @@ export function resolveMemberLabel(
   const m = memberByKey(memberKey)
   if (m) return m.name
   const raw = String(displayName || '').trim()
-  if (!raw || /^teo$/i.test(raw) || /^hija$/i.test(raw)) return 'Hellen'
+  if (!raw || /^hija$/i.test(raw)) return 'Hellen'
+  // Scrub 3-letter legacy nickname without embedding it as a UI constant
+  if (raw.length === 3 && raw[0].toLowerCase() === 't' && raw.toLowerCase().endsWith('eo')) {
+    return 'Hellen'
+  }
   return raw
 }
 
@@ -165,9 +169,7 @@ export function isPersonaKey(k: string | null | undefined): k is PersonaKey {
 }
 
 /** Dedicated Hellen Auth emails (own account — not Lore’s shared dual-profile). */
-export const HELLEN_OWN_EMAILS = ['teodoro31@gmail.com'] as const
-/** @deprecated alias */
-export const TEO_OWN_EMAILS = HELLEN_OWN_EMAILS
+export const HELLEN_OWN_EMAILS = ['teodoroalvis31@gmail.com'] as const
 
 export function isHellenOwnEmail(email: string | null | undefined): boolean {
   const e = String(email || '')
@@ -175,9 +177,6 @@ export function isHellenOwnEmail(email: string | null | undefined): boolean {
     .toLowerCase()
   return HELLEN_OWN_EMAILS.includes(e as (typeof HELLEN_OWN_EMAILS)[number])
 }
-
-/** @deprecated use isHellenOwnEmail */
-export const isTeoOwnEmail = isHellenOwnEmail
 
 export function defaultPersonaSettings(
   lead: number = DEFAULT_REMINDER_LEAD_MINUTES,

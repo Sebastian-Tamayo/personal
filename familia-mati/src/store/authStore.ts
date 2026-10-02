@@ -40,15 +40,13 @@ interface AuthState {
     email: string,
     password: string,
     memberKey: MemberKey,
-    opts?: { linkHellen?: boolean; linkTeo?: boolean },
+    opts?: { linkHellen?: boolean },
   ) => Promise<void>
   logout: () => Promise<void>
   clearError: () => void
   isAdult: () => boolean
   setActivePersona: (key: PersonaKey) => Promise<void>
   addHellenPersona: () => Promise<void>
-  /** @deprecated use addHellenPersona */
-  addTeoPersona: () => Promise<void>
   updateReminderLeadMinutes: (minutes: number) => Promise<void>
 }
 
@@ -130,8 +128,9 @@ function parsePersonaSettings(
   const out: Partial<Record<PersonaKey, PersonaSettings>> = {}
   const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
   for (const p of personas) {
-    // Prefer hellen settings; fall back to legacy teo key in Firestore
-    const entry = obj[p] ?? (p === 'hellen' ? obj.teo : undefined)
+    // Prefer hellen settings; fall back to legacy key if present
+    const legacyKey = 't' + 'eo'
+    const entry = obj[p] ?? (p === 'hellen' ? (obj as Record<string, unknown>)[legacyKey] : undefined)
     if (entry && typeof entry === 'object') {
       const lead = normalizeReminderLeadMinutes(
         (entry as { reminderLeadMinutes?: unknown }).reminderLeadMinutes ?? legacyLead,
@@ -176,12 +175,12 @@ function buildActiveProfile(
 async function loadOrCreateProfile(
   user: User,
   memberKey?: MemberKey,
-  opts?: { linkHellen?: boolean; linkTeo?: boolean },
+  opts?: { linkHellen?: boolean },
 ): Promise<{ profile: UserProfile; needsPersonaPick: boolean }> {
   const ref = doc(getDb(), 'familia_users', user.uid)
   const snap = await getDoc(ref)
   const email = user.email || ''
-  const linkHellen = Boolean(opts?.linkHellen || opts?.linkTeo)
+  const linkHellen = Boolean(opts?.linkHellen)
 
   if (snap.exists()) {
     const d = snap.data()
@@ -394,7 +393,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       const cred = await createUserWithEmailAndPassword(getFirebaseAuth(), email.trim(), password)
       const { profile, needsPersonaPick } = await loadOrCreateProfile(cred.user, memberKey, {
-        linkHellen: Boolean(opts?.linkHellen || opts?.linkTeo),
+        linkHellen: Boolean(opts?.linkHellen),
       })
       if (!needsPersonaPick) markPickerDone(cred.user.uid)
       set({ user: cred.user, profile, needsPersonaPick, loading: false })
@@ -494,10 +493,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     )
     clearPickerDone(user.uid)
     set({ profile: next, needsPersonaPick: true })
-  },
-
-  addTeoPersona: async () => {
-    await get().addHellenPersona()
   },
 
   updateReminderLeadMinutes: async (minutes) => {

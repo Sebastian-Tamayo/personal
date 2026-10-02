@@ -1,6 +1,6 @@
 import { Home, LogOut, Wallet } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
-import { resolveMemberLabel } from '../lib/family'
+import { normalizeMemberKey, resolveMemberLabel } from '../lib/family'
 import { financiasHref } from '../lib/firebase'
 import { useAuthStore } from '../store/authStore'
 import { FinanzasPinModal, isFinanzasUnlocked } from './FinanzasPinModal'
@@ -9,7 +9,7 @@ import { PersonaPickerModal, PersonaSwitcher } from './PersonaPicker'
 /** Adults only based on ACTIVE persona (Sebas/Lore). Hellen never — even on shared email. */
 function canSeeFinanzas(profile: { role: string; memberKey: string } | null): boolean {
   if (!profile) return false
-  const key = profile.memberKey === 'teo' ? 'hellen' : profile.memberKey
+  const key = normalizeMemberKey(profile.memberKey) || profile.memberKey
   if (key === 'hellen') return false
   if (profile.role === 'hijo') return false
   return profile.role === 'adulto' || key === 'sebas' || key === 'lore'

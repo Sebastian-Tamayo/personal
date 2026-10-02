@@ -11,6 +11,7 @@ import {
 } from 'firebase/firestore'
 import { create } from 'zustand'
 import type { ItemKind, ItemStatus, MemberKey, OrgItem } from '../lib/family'
+import { normalizeMemberKey } from '../lib/family'
 import { getDb } from '../lib/firebase'
 
 interface OrgState {
@@ -51,17 +52,11 @@ let unsub: Unsubscribe | null = null
 
 function mapItem(id: string, data: Record<string, unknown>): OrgItem {
   const rawAssignee = String(data.assignee ?? 'todos')
-  let assignee: MemberKey | 'todos' = 'todos'
-  if (rawAssignee === 'todos') assignee = 'todos'
-  else if (rawAssignee === 'hija' || rawAssignee === 'teo') assignee = 'hellen'
-  else if (
-    rawAssignee === 'sebas' ||
-    rawAssignee === 'lore' ||
-    rawAssignee === 'hellen' ||
-    rawAssignee === 'bebe'
-  ) {
-    assignee = rawAssignee
-  }
+  const normalized = normalizeMemberKey(rawAssignee)
+  const assignee: MemberKey | 'todos' =
+    normalized === 'todos' || normalized === 'sebas' || normalized === 'lore' || normalized === 'hellen' || normalized === 'bebe'
+      ? normalized
+      : 'todos'
   return {
     id,
     title: String(data.title ?? ''),

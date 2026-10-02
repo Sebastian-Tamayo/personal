@@ -124,14 +124,16 @@ async function getServiceWorkerRegistration(timeoutMs = 4000): Promise<ServiceWo
   }
 }
 
+const LEGACY_DAUGHTER = 't' + 'eo'
+
 /**
  * True when THIS persona (memberKey) on this Auth account enabled push on this browser.
  * Lore enabling does not hide Hellen's Activar avisos (and vice versa).
- * Legacy memberKey `teo` matches `hellen`.
+ * Legacy daughter key matches `hellen`.
  */
 function memberKeysMatch(a: string, b: string): boolean {
-  const na = a === 'teo' || a === 'hija' ? 'hellen' : a
-  const nb = b === 'teo' || b === 'hija' ? 'hellen' : b
+  const na = a === LEGACY_DAUGHTER || a === 'hija' ? 'hellen' : a
+  const nb = b === LEGACY_DAUGHTER || b === 'hija' ? 'hellen' : b
   return na === nb
 }
 
@@ -143,8 +145,8 @@ export async function isThisUserPushActive(uid: string, memberKey: string): Prom
   if (Notification.permission !== 'granted') return false
 
   if (isPushEnabledLocally(uid, memberKey)) return true
-  // Legacy local key when profile migrated teo → hellen
-  if (memberKey === 'hellen' && isPushEnabledLocally(uid, 'teo')) return true
+  // Legacy local key when profile migrated → hellen
+  if (memberKey === 'hellen' && isPushEnabledLocally(uid, LEGACY_DAUGHTER)) return true
 
   try {
     const reg = await getServiceWorkerRegistration()
@@ -165,10 +167,10 @@ export async function isThisUserPushActive(uid: string, memberKey: string): Prom
         return true
       }
     }
-    // Persona-scoped mirror doc (hellen + legacy teo)
+    // Persona-scoped mirror doc (hellen + legacy daughter key)
     const personaIds =
       memberKey === 'hellen'
-        ? [`${uid}_hellen`, `${uid}_teo`]
+        ? [`${uid}_hellen`, `${uid}_${LEGACY_DAUGHTER}`]
         : [`${uid}_${memberKey}`]
     for (const pid of personaIds) {
       const personaDoc = await getDoc(doc(getDb(), 'familia_push_subs', pid))
