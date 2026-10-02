@@ -1,7 +1,8 @@
 import { Home, LogOut, Wallet } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { financiasHref } from '../lib/firebase'
 import { useAuthStore } from '../store/authStore'
+import { FinanzasPinModal, isFinanzasUnlocked } from './FinanzasPinModal'
 
 /** Adults only (Sebas/Lore). Hellen (hijo) never sees Finanzas. */
 function canSeeFinanzas(profile: { role: string; memberKey: string } | null): boolean {
@@ -16,6 +17,19 @@ export function AppShell({ children, title }: { children: ReactNode; title?: str
   const profile = useAuthStore((s) => s.profile)
   const logout = useAuthStore((s) => s.logout)
   const showFinanzas = Boolean(user && canSeeFinanzas(profile))
+  const [pinOpen, setPinOpen] = useState(false)
+
+  function goFinanzas() {
+    window.location.assign(financiasHref())
+  }
+
+  function onFinanzasClick() {
+    if (isFinanzasUnlocked()) {
+      goFinanzas()
+      return
+    }
+    setPinOpen(true)
+  }
 
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-lg flex-col px-4 pb-10 pt-5 sm:px-6">
@@ -46,21 +60,32 @@ export function AppShell({ children, title }: { children: ReactNode; title?: str
           ) : null}
         </div>
         {showFinanzas ? (
-          <a
-            href={financiasHref()}
-            // Same-tab absolute URL: more reliable than _blank inside installed PWAs
+          <button
+            type="button"
+            onClick={onFinanzasClick}
             className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-[#0f766e]/40 bg-gradient-to-r from-[#ecfdf5] to-[#ccfbf1] px-4 py-3.5 text-sm font-extrabold text-[#0f766e] shadow-sm transition hover:border-[#0f766e] hover:shadow"
             data-testid="link-finanzas"
           >
             <Wallet className="size-5 shrink-0" aria-hidden />
             <span className="flex flex-col items-start leading-tight sm:flex-row sm:items-center sm:gap-2">
               <span>Ir a Finanzas Mati</span>
-              <span className="text-xs font-bold opacity-70">gastos · ahorro</span>
+              <span className="text-xs font-bold opacity-70">gastos · ahorro · PIN</span>
             </span>
-          </a>
+          </button>
         ) : null}
       </header>
       <main className="flex flex-1 flex-col gap-4">{children}</main>
+
+      {showFinanzas ? (
+        <FinanzasPinModal
+          open={pinOpen}
+          onClose={() => setPinOpen(false)}
+          onSuccess={() => {
+            setPinOpen(false)
+            goFinanzas()
+          }}
+        />
+      ) : null}
     </div>
   )
 }
