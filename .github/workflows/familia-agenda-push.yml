@@ -4,7 +4,6 @@ name: Familia agenda push reminders
 
 on:
   schedule:
-    # Every 15 minutes — GitHub may delay a few minutes
     - cron: '*/15 * * * *'
   workflow_dispatch:
   repository_dispatch:
@@ -16,9 +15,6 @@ permissions:
 jobs:
   remind:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: familia-mati
     steps:
       - name: Cron heartbeat
         run: |
@@ -30,13 +26,16 @@ jobs:
         with:
           node-version: '22'
       - name: Install sender deps
+        working-directory: familia-mati
         run: npm install --no-save firebase-admin@13 web-push@3.6.7
       - name: Migrate teo → hellen profiles
         continue-on-error: true
+        working-directory: familia-mati
         env:
           FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
         run: node scripts/migrate-teo-to-hellen.mjs
       - name: Send due reminders
+        working-directory: familia-mati
         env:
           FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
           VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
