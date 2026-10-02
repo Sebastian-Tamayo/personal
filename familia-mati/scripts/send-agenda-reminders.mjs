@@ -216,15 +216,20 @@ async function main() {
 
     const settings = d.personaSettings && typeof d.personaSettings === 'object' ? d.personaSettings : {}
     const personas = Array.isArray(d.personas) ? d.personas : key ? [key] : []
-    for (const p of personas) {
-      const mk = normalizeAssignee(p)
+    const personaKeys = new Set(
+      [...personas, ...Object.keys(settings)].map((p) => normalizeAssignee(p)).filter(Boolean),
+    )
+    for (const mk of personaKeys) {
       if (!mk || mk === 'todos') continue
       const entry = settings[mk]
       const lead = normalizeLeadMinutes(
         entry && typeof entry === 'object' ? entry.reminderLeadMinutes : legacyLead,
       )
+      // Prefer this account's own uid:member lead; do not let other test users overwrite.
       leadByUidMember.set(`${doc.id}:${mk}`, lead)
-      if (!leadByMember.has(mk)) leadByMember.set(mk, lead)
+      if (doc.id === d.uid || !leadByMember.has(mk)) leadByMember.set(mk, lead)
+      // If this looks like the real household member doc (email/memberKey match), prefer it
+      if (key === mk) leadByMember.set(mk, lead)
     }
     if (key && key !== 'todos' && !leadByMember.has(key)) leadByMember.set(key, legacyLead)
   }
@@ -387,11 +392,11 @@ async function main() {
       minute: '2-digit',
     })
 
-    // Dedupe by (item, uid|device, lead) so each person gets one send per lead setting
+    // Dedupe by (item, uid|device, lead, eventAt) so editing the hour gets a fresh aviso
     const byPerson = new Map()
     for (const t of dueTargets) {
       const personKey = t.uid || `${t.memberKey}:${t.id}`
-      const dedupeKey = `${personKey}_${t.leadMinutes}`
+      const dedupeKey = `${personKey}_${t.leadMinutes}_${item.eventAt}`
       if (!byPerson.has(dedupeKey)) byPerson.set(dedupeKey, [])
       byPerson.get(dedupeKey).push(t)
     }
@@ -400,7 +405,9 @@ async function main() {
       const sample = devices[0]
       const lead = sample.leadMinutes
       const uidKey = sample.uid || sample.memberKey || sample.id
-      const sentRef = db.collection('familia_reminders_sent').doc(`${item.id}_${uidKey}_${lead}m`)
+      const sentRef = db
+        .collection('familia_reminders_sent')
+        .doc(`${item.id}_${uidKey}_${lead}m_${item.eventAt}`)
       const already = await sentRef.get()
       if (already.exists) {
         skipped++
@@ -456,6 +463,7 @@ async function main() {
         uid: sample.uid || null,
         deliveredTo,
         title: item.title,
+        eventAt: item.eventAt,
         remindReason: sample.remindReason || 'primary_window',
       })
     }

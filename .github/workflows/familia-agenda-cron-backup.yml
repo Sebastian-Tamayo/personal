@@ -33,7 +33,13 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh workflow run familia-agenda-push.yml \
+          gh workflow run "Familia agenda reminders scheduled" \
+            --repo "${{ github.repository }}" \
+            --ref "${{ github.event.repository.default_branch }}" \
+          || gh workflow run familia-agenda-reminders-scheduled.yml \
+            --repo "${{ github.repository }}" \
+            --ref "${{ github.event.repository.default_branch }}" \
+          || gh workflow run familia-agenda-push.yml \
             --repo "${{ github.repository }}" \
             --ref "${{ github.event.repository.default_branch }}"
-          echo "dispatched familia-agenda-push.yml on ${{ github.event.repository.default_branch }}"
+          echo "dispatched agenda reminders on ${{ github.event.repository.default_branch }}"

@@ -33,6 +33,7 @@ function assigneeFromFilter(filter: MemberKey | 'todos'): ParaAssignee {
 
 export function HomePage() {
   const user = useAuthStore((s) => s.user)!
+  const profile = useAuthStore((s) => s.profile)
   const isAdult = useAuthStore((s) => s.isAdult)
   const items = useOrgStore((s) => s.items)
   const loading = useOrgStore((s) => s.loading)
@@ -72,6 +73,18 @@ export function HomePage() {
   const [agendaTab, setAgendaTab] = useState<AgendaTab>('hoy')
 
   useEffect(() => subscribe(), [subscribe])
+
+  // Align filter chip with active profile once (Sebas profile → Sebas chip → Para sebas).
+  useEffect(() => {
+    const key = profile?.memberKey
+    if (key === 'sebas' || key === 'lore' || key === 'hellen') {
+      if (useOrgStore.getState().filterMember === 'todos') {
+        setFilterMember(key)
+      }
+    }
+    // only when profile identity settles
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.memberKey, setFilterMember])
 
   // Keep create-form Para aligned with the active chip unless the user (or edit) set it explicitly.
   useEffect(() => {
@@ -145,12 +158,13 @@ export function HomePage() {
           status: dailyEditing.status,
         })
       } else {
+        const para = dailyAssigneeTouched ? dailyAssignee : filterDefault
         await addItem(
           {
             title: dailyTitle,
             notes: dailyNotes,
             kind: 'chore',
-            assignee: dailyAssignee,
+            assignee: para,
             date: todayISO(),
             time: '',
           },
@@ -199,12 +213,13 @@ export function HomePage() {
           status: agendaEditing.status,
         })
       } else {
+        const para = agendaAssigneeTouched ? agendaAssignee : filterDefault
         await addItem(
           {
             title: agendaTitle,
             notes: agendaNotes,
             kind: agendaKind,
-            assignee: agendaAssignee,
+            assignee: para,
             date: agendaDate || todayISO(),
             time: agendaTime,
           },

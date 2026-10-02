@@ -222,25 +222,41 @@ async function main() {
 
   const sendResults = []
   if (doSend) {
+    // Heal latest Sebas-created item still wrongly stored as todos → sebas
+    for (const a of analysis.slice(0, 1)) {
+      if (a.assigneeNorm === 'todos' && a.createdMadrid) {
+        await db.collection('familia_items').doc(a.id).set({ assignee: 'sebas' }, { merge: true })
+        a.assigneeStored = 'sebas'
+        a.assigneeNorm = 'sebas'
+        a.targets = ['sebas']
+        a.sebasInTargets = true
+        a.healedAssignee = true
+      }
+    }
     for (const a of analysis) {
       if (!a.decision.ok || !a.sebasInTargets) continue
       const lead = a.sebasLeadMin
-      const sentId = `${a.id}_${SEBAS_UID}_${lead}m`
+      const item = latest.find((i) => i.id === a.id)
+      const eventAt = item?.eventAt
+      if (!eventAt) continue
+      const sentId = `${a.id}_${SEBAS_UID}_${lead}m_${eventAt}`
+      const legacyId = `${a.id}_${SEBAS_UID}_${lead}m`
       const already = sentSnap.docs.some((d) => d.id === sentId)
       if (already) {
-        sendResults.push({ itemId: a.id, title: a.title, skipped: 'alreadySent' })
+        sendResults.push({ itemId: a.id, title: a.title, skipped: 'alreadySent_eventAt' })
         continue
       }
+      // If hour was edited after a legacy send, allow a new push under the eventAt key.
       const liveSubs = sebasSubs.filter((s) => s.endpoint && s.keys)
       if (!liveSubs.length) {
         sendResults.push({ itemId: a.id, title: a.title, skipped: 'no_subs' })
         continue
       }
-      const item = latest.find((i) => i.id === a.id)
       const payload = JSON.stringify({
-        title: 'Aviso agenda',
-        body: `${a.title} · ${a.time || ''} (en ${lead} min)`.trim(),
+        title: 'Familia Hellen y Mati · aviso',
+        body: `En ~${lead} min: ${a.title} (${a.time || ''})`,
         data: { itemId: a.id, url: '/personal/familia/' },
+        tag: `agenda-${a.id}-${lead}-${eventAt}`,
       })
       let ok = 0
       const statuses = []
@@ -265,10 +281,18 @@ async function main() {
           leadMinutes: lead,
           at: Date.now(),
           deliveredTo: ['sebas'],
-          eventAt: item?.eventAt || null,
+          eventAt,
+          healedFromLegacy: sentSnap.docs.some((d) => d.id === legacyId),
         })
       }
-      sendResults.push({ itemId: a.id, title: a.title, pushed: ok, statuses })
+      sendResults.push({
+        itemId: a.id,
+        title: a.title,
+        pushed: ok,
+        statuses,
+        healedAssignee: a.healedAssignee || false,
+        eventAt,
+      })
     }
   }
 

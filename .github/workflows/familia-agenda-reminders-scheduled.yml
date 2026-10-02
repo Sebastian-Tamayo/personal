@@ -1,0 +1,47 @@
+# Fresh workflow id to force GitHub to re-register schedules (old file kept disabled).
+# UTC crons. Reminder math uses Europe/Madrid in the script.
+name: Familia agenda reminders scheduled
+
+on:
+  schedule:
+    - cron: '0,15,30,45 * * * *'
+    - cron: '8,23,38,53 * * * *'
+  workflow_dispatch:
+  repository_dispatch:
+    types: [familia-agenda-remind]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: familia-agenda-reminders
+  cancel-in-progress: false
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Cron heartbeat
+        run: |
+          echo "event=${{ github.event_name }}"
+          echo "utc=$(date -u -Iseconds)"
+          echo "madrid=$(TZ=Europe/Madrid date -Iseconds)"
+          echo "ref=${{ github.ref }}"
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install sender deps
+        working-directory: familia-mati
+        run: npm install --no-save firebase-admin@13 web-push@3.6.7
+      - name: Send due reminders
+        working-directory: familia-mati
+        env:
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+          VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT }}
+          REMINDER_TZ: Europe/Madrid
+          REMINDER_WINDOW_MINUTES: '45'
+        run: node scripts/send-agenda-reminders.mjs
