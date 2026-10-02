@@ -127,7 +127,8 @@ function eventUtcMs(dateStr, timeStr, timeZone) {
 
 const HOUSEHOLD = new Set(['sebas', 'lore', 'hellen'])
 
-/** Normalize assignee / para → sebas|lore|hellen|todos|null (legacy teo|hija → hellen) */
+/** Normalize assignee / para → sebas|lore|hellen|todos|null (legacy teo|hija → hellen).
+ * Empty / unknown → null (NEVER silently becomes todos). */
 function normalizeAssignee(raw) {
   const v = String(raw || '')
     .trim()
@@ -140,17 +141,32 @@ function normalizeAssignee(raw) {
 }
 
 /**
- * Privacy: only matching people get the push.
- * - todos → every subscribed household member (sebas/lore/hellen)
- * - sebas|lore|hellen → only that memberKey (never the others)
+ * STRICT targeting by item.assignee / para only:
+ * - sebas|lore|hellen → only that memberKey’s push devices
+ * - todos → all household members with push enabled
+ * - missing/invalid → nobody (never broadcast)
+ * Creator of the item is irrelevant.
  */
 function recipientsForItem(item, subs) {
   const who = normalizeAssignee(item.assignee ?? item.para)
   if (!who) return []
   if (who === 'todos') {
-    return subs.filter((s) => HOUSEHOLD.has(normalizeAssignee(s.memberKey) || ''))
+    return subs.filter((s) => {
+      const mk = normalizeAssignee(s.memberKey)
+      return mk && HOUSEHOLD.has(mk)
+    })
   }
+  // Exact member only — never fan out
   return subs.filter((s) => normalizeAssignee(s.memberKey) === who)
+}
+
+function assertTargeting(who, recipients) {
+  const keys = [...new Set(recipients.map((r) => normalizeAssignee(r.memberKey)).filter(Boolean))]
+  if (!who) return { ok: keys.length === 0, keys }
+  if (who === 'todos') {
+    return { ok: keys.every((k) => HOUSEHOLD.has(k)), keys }
+  }
+  return { ok: keys.length === 0 || (keys.length === 1 && keys[0] === who), keys }
 }
 
 /**
@@ -257,17 +273,15 @@ async function main() {
   const subs = subsSnap.docs
     .map((doc) => {
       const data = doc.data() || {}
-      let memberKey = normalizeAssignee(data.memberKey)
-      const uid = data.uid || (!data.legacyUidDoc && doc.id.length === 28 ? doc.id : null)
-      if (!memberKey || memberKey === 'todos') {
-        memberKey = memberByUid.get(doc.id) || (uid ? memberByUid.get(uid) : null) || null
-      }
+      // STRICT: only trust explicit memberKey on the sub (set at Activar avisos).
+      // Do NOT infer from uid's current active persona — that can mis-route after a persona switch.
+      const memberKey = normalizeAssignee(data.memberKey)
+      const uid = data.uid || null
       const resolvedUid = uid || data.uid || null
       const leadMinutes =
         (resolvedUid && memberKey && leadByUidMember.get(`${resolvedUid}:${memberKey}`)) ||
         (memberKey && leadByMember.get(memberKey)) ||
         (resolvedUid && leadByUid.get(resolvedUid)) ||
-        leadByUid.get(doc.id) ||
         DEFAULT_LEAD_MINUTES
       return {
         id: doc.id,
@@ -286,7 +300,8 @@ async function main() {
         s.endpoint &&
         s.keys?.p256dh &&
         s.keys?.auth &&
-        HOUSEHOLD.has(normalizeAssignee(s.memberKey) || ''),
+        s.memberKey &&
+        HOUSEHOLD.has(s.memberKey),
     )
 
   const activeByMember = {}
@@ -303,6 +318,7 @@ async function main() {
   for (const item of agenda) {
     const who = normalizeAssignee(item.assignee ?? item.para)
     const targets = recipientsForItem(item, subs)
+    const targetingCheck = assertTargeting(who, targets)
 
     const dueTargets = []
     const skipReasons = []
@@ -315,6 +331,24 @@ async function main() {
       }
     }
 
+    // Safety: never send if targeting assertion fails (would indicate a fan-out bug)
+    if (!targetingCheck.ok) {
+      console.error('TARGETING_GUARD', {
+        itemId: item.id,
+        assignee: who,
+        recipientKeys: targetingCheck.keys,
+      })
+      skipped++
+      targetingLog.push({
+        itemId: item.id,
+        title: item.title,
+        assignee: who,
+        blocked: 'targeting_guard',
+        recipientKeys: targetingCheck.keys,
+      })
+      continue
+    }
+
     targetingLog.push({
       itemId: item.id,
       title: item.title,
@@ -322,6 +356,7 @@ async function main() {
       assignee: who,
       eventMadrid: new Date(item.eventAt).toLocaleString('es-ES', { timeZone: tz }),
       targets: targets.map((t) => t.memberKey),
+      targetingOk: targetingCheck.ok,
       due: dueTargets.map((t) => ({
         memberKey: t.memberKey,
         leadMinutes: t.leadMinutes,
