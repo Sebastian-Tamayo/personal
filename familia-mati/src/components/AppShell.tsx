@@ -1,13 +1,21 @@
 import { Home, LogOut, Wallet } from 'lucide-react'
 import type { ReactNode } from 'react'
-import { FINANZAS_URL } from '../lib/firebase'
+import { financiasHref } from '../lib/firebase'
 import { useAuthStore } from '../store/authStore'
+
+/** Adults only (Sebas/Lore). Hellen (hijo) never sees Finanzas. */
+function canSeeFinanzas(profile: { role: string; memberKey: string } | null): boolean {
+  if (!profile) return false
+  if (profile.memberKey === 'hellen') return false
+  if (profile.role === 'hijo') return false
+  return profile.role === 'adulto' || profile.memberKey === 'sebas' || profile.memberKey === 'lore'
+}
 
 export function AppShell({ children, title }: { children: ReactNode; title?: string }) {
   const user = useAuthStore((s) => s.user)
   const profile = useAuthStore((s) => s.profile)
   const logout = useAuthStore((s) => s.logout)
-  const isAdult = useAuthStore((s) => s.isAdult)
+  const showFinanzas = Boolean(user && canSeeFinanzas(profile))
 
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-lg flex-col px-4 pb-10 pt-5 sm:px-6">
@@ -37,16 +45,18 @@ export function AppShell({ children, title }: { children: ReactNode; title?: str
             </button>
           ) : null}
         </div>
-        {user && isAdult() ? (
+        {showFinanzas ? (
           <a
-            href={FINANZAS_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-[#0f766e]/35 bg-gradient-to-r from-[#ecfdf5] to-[#ccfbf1] px-4 py-3 text-sm font-extrabold text-[#0f766e] shadow-sm transition hover:border-[#0f766e] hover:shadow"
+            href={financiasHref()}
+            // Same-tab absolute URL: more reliable than _blank inside installed PWAs
+            className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-[#0f766e]/40 bg-gradient-to-r from-[#ecfdf5] to-[#ccfbf1] px-4 py-3.5 text-sm font-extrabold text-[#0f766e] shadow-sm transition hover:border-[#0f766e] hover:shadow"
+            data-testid="link-finanzas"
           >
-            <Wallet className="size-5" aria-hidden />
-            Ir a Finanzas Mati
-            <span className="text-xs font-bold opacity-70">gastos · ahorro</span>
+            <Wallet className="size-5 shrink-0" aria-hidden />
+            <span className="flex flex-col items-start leading-tight sm:flex-row sm:items-center sm:gap-2">
+              <span>Ir a Finanzas Mati</span>
+              <span className="text-xs font-bold opacity-70">gastos · ahorro</span>
+            </span>
           </a>
         ) : null}
       </header>

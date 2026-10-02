@@ -147,5 +147,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   clearError: () => set({ error: null }),
 
-  isAdult: () => get().profile?.role === 'adulto',
+  isAdult: () => {
+    const p = get().profile
+    if (!p) return false
+    if (p.memberKey === 'hellen' || p.role === 'hijo') return false
+    return p.role === 'adulto' || p.memberKey === 'sebas' || p.memberKey === 'lore'
+  },
 }))

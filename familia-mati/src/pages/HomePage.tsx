@@ -1,4 +1,4 @@
-import { Baby, CheckCircle2, Circle, Home, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { Baby, CalendarDays, CheckCircle2, Circle, Home, Pencil, Plus, Trash2, X } from 'lucide-react'
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { AppShell } from '../components/AppShell'
 import {
@@ -16,7 +16,9 @@ import {
 import { useAuthStore } from '../store/authStore'
 import { useOrgStore } from '../store/orgStore'
 
-type TabId = 'hoy' | 'proximos' | 'diarias'
+type AgendaTab = 'hoy' | 'proximos'
+
+const HOUSEHOLD = FAMILY_MEMBERS.filter((m) => m.key === 'sebas' || m.key === 'lore' || m.key === 'hellen')
 
 export function HomePage() {
   const user = useAuthStore((s) => s.user)!
@@ -32,15 +34,23 @@ export function HomePage() {
   const setStatus = useOrgStore((s) => s.setStatus)
   const deleteItem = useOrgStore((s) => s.deleteItem)
 
-  const [title, setTitle] = useState('')
-  const [notes, setNotes] = useState('')
-  const [kind, setKind] = useState<ItemKind>('tarea')
-  const [assignee, setAssignee] = useState<MemberKey | 'todos'>('todos')
-  const [date, setDate] = useState(todayISO())
-  const [time, setTime] = useState('')
-  const [editing, setEditing] = useState<OrgItem | null>(null)
-  const [busy, setBusy] = useState(false)
-  const [tab, setTab] = useState<TabId>('hoy')
+  // —— Tareas diarias form ——
+  const [dailyTitle, setDailyTitle] = useState('')
+  const [dailyNotes, setDailyNotes] = useState('')
+  const [dailyAssignee, setDailyAssignee] = useState<MemberKey | 'todos'>('todos')
+  const [dailyEditing, setDailyEditing] = useState<OrgItem | null>(null)
+  const [dailyBusy, setDailyBusy] = useState(false)
+
+  // —— Agenda form ——
+  const [agendaTitle, setAgendaTitle] = useState('')
+  const [agendaNotes, setAgendaNotes] = useState('')
+  const [agendaKind, setAgendaKind] = useState<ItemKind>('cita')
+  const [agendaAssignee, setAgendaAssignee] = useState<MemberKey | 'todos'>('todos')
+  const [agendaDate, setAgendaDate] = useState(todayISO())
+  const [agendaTime, setAgendaTime] = useState('')
+  const [agendaEditing, setAgendaEditing] = useState<OrgItem | null>(null)
+  const [agendaBusy, setAgendaBusy] = useState(false)
+  const [agendaTab, setAgendaTab] = useState<AgendaTab>('hoy')
 
   useEffect(() => subscribe(), [subscribe])
 
@@ -55,82 +65,75 @@ export function HomePage() {
     })
   }, [items, filterMember, isAdult])
 
-  // Agenda = citas / tareas / bebé (no diarias — esas van a su sección)
-  const agenda = filtered.filter((i) => i.kind !== 'chore')
-  const hoy = agenda.filter((i) => i.date === today || (!i.date && i.status === 'pendiente'))
-  const proximos = agenda.filter((i) => i.date > today)
-  const diarias = filtered.filter((i) => i.kind === 'chore')
-  const diariasHoy = diarias.filter(
-    (i) => i.date === today || !i.date || (i.date < today && i.status === 'pendiente'),
+  const diariasHoy = filtered.filter(
+    (i) =>
+      i.kind === 'chore' &&
+      (i.date === today || !i.date || (i.date < today && i.status === 'pendiente')),
   )
+  const agendaItems = filtered.filter((i) => i.kind === 'cita' || i.kind === 'tarea')
+  const agendaHoy = agendaItems.filter(
+    (i) => i.date === today || (!i.date && i.status === 'pendiente'),
+  )
+  const agendaProximos = agendaItems.filter((i) => i.date > today)
+  const agendaList = agendaTab === 'hoy' ? agendaHoy : agendaProximos
   const baby = filtered.filter((i) => i.kind === 'bebe')
 
-  const list = tab === 'hoy' ? hoy : tab === 'proximos' ? proximos : diariasHoy
-  const isDiarias = tab === 'diarias'
+  const dailyDone = diariasHoy.filter((i) => i.status === 'hecha').length
+  const dailyPending = diariasHoy.length - dailyDone
 
-  function reset() {
-    setTitle('')
-    setNotes('')
-    setKind(isDiarias ? 'chore' : 'tarea')
-    setAssignee('todos')
-    setDate(todayISO())
-    setTime('')
-    setEditing(null)
+  function resetDaily() {
+    setDailyTitle('')
+    setDailyNotes('')
+    setDailyAssignee('todos')
+    setDailyEditing(null)
   }
 
-  function switchTab(id: TabId) {
-    setTab(id)
-    setEditing(null)
-    setTitle('')
-    setNotes('')
-    setKind(id === 'diarias' ? 'chore' : 'tarea')
-    setAssignee('todos')
-    setDate(todayISO())
-    setTime('')
+  function resetAgenda() {
+    setAgendaTitle('')
+    setAgendaNotes('')
+    setAgendaKind('cita')
+    setAgendaAssignee('todos')
+    setAgendaDate(todayISO())
+    setAgendaTime('')
+    setAgendaEditing(null)
   }
 
-  async function onSubmit(e: FormEvent) {
+  async function onSubmitDaily(e: FormEvent) {
     e.preventDefault()
-    if (!title.trim()) return
-    const finalKind = isDiarias && !editing ? 'chore' : kind
-    if (!isAdult() && finalKind === 'bebe') return
-    setBusy(true)
+    if (!dailyTitle.trim()) return
+    setDailyBusy(true)
     try {
-      if (editing) {
-        await updateItem(editing.id, {
-          title,
-          notes,
-          kind: finalKind,
-          assignee,
-          date,
-          time,
-          status: editing.status,
+      if (dailyEditing) {
+        await updateItem(dailyEditing.id, {
+          title: dailyTitle,
+          notes: dailyNotes,
+          kind: 'chore',
+          assignee: dailyAssignee,
+          date: dailyEditing.date || todayISO(),
+          time: dailyEditing.time || '',
+          status: dailyEditing.status,
         })
       } else {
         await addItem(
-          { title, notes, kind: finalKind, assignee, date: date || todayISO(), time },
+          {
+            title: dailyTitle,
+            notes: dailyNotes,
+            kind: 'chore',
+            assignee: dailyAssignee,
+            date: todayISO(),
+            time: '',
+          },
           user.uid,
         )
       }
-      reset()
+      resetDaily()
     } finally {
-      setBusy(false)
+      setDailyBusy(false)
     }
   }
 
-  function startEdit(item: OrgItem) {
-    setEditing(item)
-    setTitle(item.title)
-    setNotes(item.notes)
-    setKind(item.kind)
-    setAssignee(item.assignee)
-    setDate(item.date || todayISO())
-    setTime(item.time)
-    if (item.kind === 'chore') setTab('diarias')
-  }
-
   async function quickAddDaily(label: string) {
-    setBusy(true)
+    setDailyBusy(true)
     try {
       await addItem(
         {
@@ -144,15 +147,64 @@ export function HomePage() {
         user.uid,
       )
     } finally {
-      setBusy(false)
+      setDailyBusy(false)
     }
   }
 
-  const doneCount = diariasHoy.filter((i) => i.status === 'hecha').length
-  const pendingCount = diariasHoy.length - doneCount
+  async function onSubmitAgenda(e: FormEvent) {
+    e.preventDefault()
+    if (!agendaTitle.trim()) return
+    if (agendaKind === 'chore' || agendaKind === 'bebe') return
+    setAgendaBusy(true)
+    try {
+      if (agendaEditing) {
+        await updateItem(agendaEditing.id, {
+          title: agendaTitle,
+          notes: agendaNotes,
+          kind: agendaKind,
+          assignee: agendaAssignee,
+          date: agendaDate,
+          time: agendaTime,
+          status: agendaEditing.status,
+        })
+      } else {
+        await addItem(
+          {
+            title: agendaTitle,
+            notes: agendaNotes,
+            kind: agendaKind,
+            assignee: agendaAssignee,
+            date: agendaDate || todayISO(),
+            time: agendaTime,
+          },
+          user.uid,
+        )
+      }
+      resetAgenda()
+    } finally {
+      setAgendaBusy(false)
+    }
+  }
+
+  function startEditDaily(item: OrgItem) {
+    setDailyEditing(item)
+    setDailyTitle(item.title)
+    setDailyNotes(item.notes)
+    setDailyAssignee(item.assignee === 'bebe' ? 'todos' : item.assignee)
+  }
+
+  function startEditAgenda(item: OrgItem) {
+    setAgendaEditing(item)
+    setAgendaTitle(item.title)
+    setAgendaNotes(item.notes)
+    setAgendaKind(item.kind === 'tarea' ? 'tarea' : 'cita')
+    setAgendaAssignee(item.assignee === 'bebe' ? 'todos' : item.assignee)
+    setAgendaDate(item.date || todayISO())
+    setAgendaTime(item.time)
+  }
 
   return (
-    <AppShell title="Agenda, tareas diarias y cuidados">
+    <AppShell title="En casa hoy · citas y compromisos">
       <section className="animate-rise flex gap-2 overflow-x-auto pb-1">
         <FilterChip
           active={filterMember === 'todos'}
@@ -180,209 +232,274 @@ export function HomePage() {
         </p>
       ) : null}
 
-      <div className="flex gap-2 rounded-xl bg-black/5 p-1">
-        {(
-          [
-            ['hoy', 'Hoy'],
-            ['proximos', 'Próximos'],
-            ['diarias', 'Tareas diarias'],
-          ] as const
-        ).map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => switchTab(id)}
-            className={`flex-1 rounded-lg px-1.5 py-2 text-xs font-extrabold sm:text-sm ${
-              tab === id
-                ? id === 'diarias'
-                  ? 'bg-[#fef08a] text-[#854d0e] shadow-sm'
-                  : 'bg-white text-[var(--accent-deep)] shadow-sm'
-                : 'text-[var(--ink-soft)]'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {/* Form */}
-      <section
-        className={`rounded-2xl border p-4 shadow-[var(--shadow)] ${
-          isDiarias
-            ? 'border-[#ca8a04]/40 bg-gradient-to-br from-[#fef9c3] to-[#fef08a]/60'
-            : 'border-[var(--line)] bg-[var(--surface)]'
-        }`}
-      >
-        <h2 className="mb-1 text-lg font-bold">
-          {editing
-            ? 'Editar'
-            : isDiarias
-              ? 'Nueva tarea diaria'
-              : 'Nuevo pendiente'}
-        </h2>
-        {isDiarias && !editing ? (
-          <p className="mb-3 text-xs font-semibold text-[#854d0e]">
-            De casa: barrer, aspirar, comida… asígnala a Sebas, Lore o Hellen.
+      {/* ========== 1. TAREAS DIARIAS (primary, first) ========== */}
+      <section className="overflow-hidden rounded-3xl border-2 border-[#ca8a04]/45 bg-gradient-to-br from-[#fef9c3] via-[#fef08a]/70 to-[#fde68a]/40 shadow-[var(--shadow)]">
+        <div className="border-b border-[#ca8a04]/25 bg-[#ca8a04]/15 px-4 py-3">
+          <h2 className="flex items-center gap-2 text-lg font-extrabold text-[#854d0e]">
+            <Home className="size-5" aria-hidden />
+            Tareas diarias · En casa
+          </h2>
+          <p className="mt-0.5 text-xs font-semibold text-[#a16207]">
+            Barrer, aspirar, comida… para Sebas, Lore y Hellen · {dailyPending} pendientes ·{' '}
+            {dailyDone} hechas
           </p>
-        ) : null}
-        {isDiarias && !editing ? (
-          <div className="mb-3 flex flex-wrap gap-1.5">
-            {DAILY_TASK_SUGGESTIONS.map((s) => (
-              <button
-                key={s}
-                type="button"
-                disabled={busy}
-                onClick={() => void quickAddDaily(s)}
-                className="rounded-full border border-[#ca8a04]/50 bg-white/80 px-2.5 py-1 text-xs font-bold text-[#854d0e] disabled:opacity-50"
-              >
-                + {s}
-              </button>
-            ))}
-          </div>
-        ) : null}
-        <form className="grid gap-2" onSubmit={onSubmit}>
-          <input
-            required
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder={isDiarias ? 'Ej. Barrer el salón' : 'Título'}
-            className="rounded-xl border border-[var(--line)] bg-white/90 px-3 py-2.5 outline-none ring-[var(--accent)] focus:ring-2"
-          />
-          <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="Notas (opcional)"
-            rows={2}
-            className="resize-none rounded-xl border border-[var(--line)] bg-white/90 px-3 py-2.5 outline-none ring-[var(--accent)] focus:ring-2"
-          />
-          <div className="grid grid-cols-2 gap-2">
-            {!isDiarias || editing ? (
-              <label className="text-sm">
-                <span className="mb-1 block font-bold text-[var(--ink-soft)]">Tipo</span>
-                <select
-                  value={kind}
-                  onChange={(e) => setKind(e.target.value as ItemKind)}
-                  className="w-full rounded-xl border border-[var(--line)] bg-white/90 px-3 py-2.5"
+        </div>
+
+        <div className="space-y-3 p-4">
+          {!dailyEditing ? (
+            <div className="flex flex-wrap gap-1.5">
+              {DAILY_TASK_SUGGESTIONS.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  disabled={dailyBusy}
+                  onClick={() => void quickAddDaily(s)}
+                  className="rounded-full border border-[#ca8a04]/50 bg-white/85 px-2.5 py-1 text-xs font-bold text-[#854d0e] disabled:opacity-50"
                 >
-                  <option value="tarea">Tarea</option>
-                  <option value="cita">Cita</option>
-                  <option value="chore">Tarea diaria</option>
-                  {isAdult() ? <option value="bebe">Bebé</option> : null}
-                </select>
-              </label>
-            ) : (
-              <label className="text-sm">
-                <span className="mb-1 block font-bold text-[var(--ink-soft)]">Tipo</span>
-                <div className="rounded-xl border border-[#ca8a04]/40 bg-white/90 px-3 py-2.5 text-sm font-extrabold text-[#854d0e]">
-                  Tarea diaria
-                </div>
-              </label>
-            )}
+                  + {s}
+                </button>
+              ))}
+            </div>
+          ) : null}
+
+          <form className="grid gap-2 rounded-2xl border border-[#ca8a04]/30 bg-white/75 p-3" onSubmit={onSubmitDaily}>
+            <p className="text-sm font-extrabold text-[#854d0e]">
+              {dailyEditing ? 'Editar tarea diaria' : 'Nueva tarea diaria'}
+            </p>
+            <input
+              required
+              value={dailyTitle}
+              onChange={(e) => setDailyTitle(e.target.value)}
+              placeholder="Ej. Barrer el salón"
+              className="rounded-xl border border-[var(--line)] bg-white px-3 py-2.5 outline-none ring-[#ca8a04] focus:ring-2"
+            />
+            <textarea
+              value={dailyNotes}
+              onChange={(e) => setDailyNotes(e.target.value)}
+              placeholder="Notas (opcional)"
+              rows={2}
+              className="resize-none rounded-xl border border-[var(--line)] bg-white px-3 py-2.5 outline-none ring-[#ca8a04] focus:ring-2"
+            />
             <label className="text-sm">
               <span className="mb-1 block font-bold text-[var(--ink-soft)]">Para</span>
               <select
-                value={assignee}
-                onChange={(e) => setAssignee(e.target.value as MemberKey | 'todos')}
-                className="w-full rounded-xl border border-[var(--line)] bg-white/90 px-3 py-2.5"
+                value={dailyAssignee}
+                onChange={(e) => setDailyAssignee(e.target.value as MemberKey | 'todos')}
+                className="w-full rounded-xl border border-[var(--line)] bg-white px-3 py-2.5"
               >
                 <option value="todos">Todos</option>
-                {FAMILY_MEMBERS.filter((m) => m.key !== 'bebe').map((m) => (
+                {HOUSEHOLD.map((m) => (
                   <option key={m.key} value={m.key}>
                     {m.name}
                   </option>
                 ))}
               </select>
             </label>
+            <div className="flex gap-2">
+              <button
+                type="submit"
+                disabled={dailyBusy}
+                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-[#ca8a04] px-3 py-2.5 text-sm font-extrabold text-white disabled:opacity-60"
+              >
+                {dailyEditing ? <Pencil className="size-4" /> : <Plus className="size-4" />}
+                {dailyEditing ? 'Guardar' : 'Añadir'}
+              </button>
+              {dailyEditing ? (
+                <button
+                  type="button"
+                  onClick={resetDaily}
+                  className="rounded-xl border border-[var(--line)] bg-white px-3"
+                >
+                  <X className="size-4" />
+                </button>
+              ) : null}
+            </div>
+          </form>
+
+          <div>
+            <h3 className="mb-2 text-sm font-extrabold uppercase tracking-wide text-[#854d0e]">
+              En casa hoy
+            </h3>
+            {loading ? (
+              <p className="text-sm text-[var(--ink-soft)]">Cargando…</p>
+            ) : diariasHoy.length === 0 ? (
+              <p className="text-sm text-[var(--ink-soft)]">
+                Nada en casa todavía. Usa una sugerencia o añade una tarea.
+              </p>
+            ) : (
+              <ul className="flex flex-col gap-2">
+                {diariasHoy.map((item) => (
+                  <ItemRow
+                    key={item.id}
+                    item={item}
+                    emphasizeDaily
+                    onToggle={() =>
+                      void setStatus(item.id, item.status === 'hecha' ? 'pendiente' : 'hecha')
+                    }
+                    onEdit={() => startEditDaily(item)}
+                    onDelete={() => {
+                      if (confirm(`¿Eliminar «${item.title}»?`)) void deleteItem(item.id)
+                    }}
+                  />
+                ))}
+              </ul>
+            )}
           </div>
-          {!isDiarias || editing ? (
+        </div>
+      </section>
+
+      {/* ========== 2. AGENDA (citas / compromisos) — separate ========== */}
+      <section className="overflow-hidden rounded-3xl border-2 border-[#0f766e]/30 bg-gradient-to-br from-[#f0fdfa] to-[#ccfbf1]/40 shadow-[var(--shadow)]">
+        <div className="border-b border-[#0f766e]/20 bg-[#0f766e]/10 px-4 py-3">
+          <h2 className="flex items-center gap-2 text-lg font-extrabold text-[#0f766e]">
+            <CalendarDays className="size-5" aria-hidden />
+            Agenda · citas y compromisos
+          </h2>
+          <p className="mt-0.5 text-xs font-semibold text-[#0f766e]/80">
+            Entrenar, recoger al bebé, deberes puntuales… no son tareas de casa.
+          </p>
+        </div>
+
+        <div className="space-y-3 p-4">
+          <div className="flex gap-2 rounded-xl bg-[#0f766e]/10 p-1">
+            {(
+              [
+                ['hoy', 'Hoy'],
+                ['proximos', 'Próximos'],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setAgendaTab(id)}
+                className={`flex-1 rounded-lg px-2 py-2 text-sm font-extrabold ${
+                  agendaTab === id
+                    ? 'bg-white text-[#0f766e] shadow-sm'
+                    : 'text-[#0f766e]/70'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <form
+            className="grid gap-2 rounded-2xl border border-[#0f766e]/20 bg-white/80 p-3"
+            onSubmit={onSubmitAgenda}
+          >
+            <p className="text-sm font-extrabold text-[#0f766e]">
+              {agendaEditing ? 'Editar compromiso' : 'Nuevo en la agenda'}
+            </p>
+            <input
+              required
+              value={agendaTitle}
+              onChange={(e) => setAgendaTitle(e.target.value)}
+              placeholder="Ej. Ir a entrenar · Recoger al bebé"
+              className="rounded-xl border border-[var(--line)] bg-white px-3 py-2.5 outline-none ring-[#0f766e] focus:ring-2"
+            />
+            <textarea
+              value={agendaNotes}
+              onChange={(e) => setAgendaNotes(e.target.value)}
+              placeholder="Notas (opcional)"
+              rows={2}
+              className="resize-none rounded-xl border border-[var(--line)] bg-white px-3 py-2.5 outline-none ring-[#0f766e] focus:ring-2"
+            />
+            <div className="grid grid-cols-2 gap-2">
+              <label className="text-sm">
+                <span className="mb-1 block font-bold text-[var(--ink-soft)]">Tipo</span>
+                <select
+                  value={agendaKind}
+                  onChange={(e) => setAgendaKind(e.target.value as ItemKind)}
+                  className="w-full rounded-xl border border-[var(--line)] bg-white px-3 py-2.5"
+                >
+                  <option value="cita">Cita</option>
+                  <option value="tarea">Deber / puntual</option>
+                </select>
+              </label>
+              <label className="text-sm">
+                <span className="mb-1 block font-bold text-[var(--ink-soft)]">Para</span>
+                <select
+                  value={agendaAssignee}
+                  onChange={(e) => setAgendaAssignee(e.target.value as MemberKey | 'todos')}
+                  className="w-full rounded-xl border border-[var(--line)] bg-white px-3 py-2.5"
+                >
+                  <option value="todos">Todos</option>
+                  {HOUSEHOLD.map((m) => (
+                    <option key={m.key} value={m.key}>
+                      {m.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
             <div className="grid grid-cols-2 gap-2">
               <label className="text-sm">
                 <span className="mb-1 block font-bold text-[var(--ink-soft)]">Fecha</span>
                 <input
                   type="date"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                  className="w-full rounded-xl border border-[var(--line)] bg-white/90 px-3 py-2.5"
+                  value={agendaDate}
+                  onChange={(e) => setAgendaDate(e.target.value)}
+                  className="w-full rounded-xl border border-[var(--line)] bg-white px-3 py-2.5"
                 />
               </label>
               <label className="text-sm">
                 <span className="mb-1 block font-bold text-[var(--ink-soft)]">Hora</span>
                 <input
                   type="time"
-                  value={time}
-                  onChange={(e) => setTime(e.target.value)}
-                  className="w-full rounded-xl border border-[var(--line)] bg-white/90 px-3 py-2.5"
+                  value={agendaTime}
+                  onChange={(e) => setAgendaTime(e.target.value)}
+                  className="w-full rounded-xl border border-[var(--line)] bg-white px-3 py-2.5"
                 />
               </label>
             </div>
-          ) : null}
-          <div className="flex gap-2">
-            <button
-              type="submit"
-              disabled={busy}
-              className={`inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-sm font-extrabold text-white disabled:opacity-60 ${
-                isDiarias ? 'bg-[#ca8a04]' : 'bg-[var(--accent)]'
-              }`}
-            >
-              {editing ? <Pencil className="size-4" /> : <Plus className="size-4" />}
-              {editing ? 'Guardar' : 'Añadir'}
-            </button>
-            {editing ? (
-              <button type="button" onClick={reset} className="rounded-xl border border-[var(--line)] bg-white px-3">
-                <X className="size-4" />
+            <div className="flex gap-2">
+              <button
+                type="submit"
+                disabled={agendaBusy}
+                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-[#0f766e] px-3 py-2.5 text-sm font-extrabold text-white disabled:opacity-60"
+              >
+                {agendaEditing ? <Pencil className="size-4" /> : <Plus className="size-4" />}
+                {agendaEditing ? 'Guardar' : 'Añadir a agenda'}
               </button>
-            ) : null}
-          </div>
-        </form>
-      </section>
+              {agendaEditing ? (
+                <button
+                  type="button"
+                  onClick={resetAgenda}
+                  className="rounded-xl border border-[var(--line)] bg-white px-3"
+                >
+                  <X className="size-4" />
+                </button>
+              ) : null}
+            </div>
+          </form>
 
-      {/* List */}
-      <section
-        className={`rounded-2xl border p-4 shadow-[var(--shadow)] ${
-          isDiarias
-            ? 'border-[#ca8a04]/35 bg-[#fffbeb]'
-            : 'border-[var(--line)] bg-[var(--surface)]'
-        }`}
-      >
-        {isDiarias ? (
-          <div className="mb-3">
-            <h2 className="flex items-center gap-2 text-lg font-extrabold text-[#854d0e]">
-              <Home className="size-5" aria-hidden />
-              En casa hoy
-            </h2>
-            <p className="mt-0.5 text-xs font-semibold text-[#a16207]">
-              {pendingCount} pendientes · {doneCount} hechas
-            </p>
+          <div>
+            <h3 className="mb-2 text-sm font-extrabold text-[#0f766e]">
+              {agendaTab === 'hoy' ? 'Hoy en la agenda' : 'Próximos días'}
+            </h3>
+            {loading ? (
+              <p className="text-sm text-[var(--ink-soft)]">Cargando…</p>
+            ) : agendaList.length === 0 ? (
+              <p className="text-sm text-[var(--ink-soft)]">Nada aquí. Añade una cita o compromiso.</p>
+            ) : (
+              <ul className="divide-y divide-[#0f766e]/15 rounded-2xl border border-[#0f766e]/15 bg-white/70">
+                {agendaList.map((item) => (
+                  <ItemRow
+                    key={item.id}
+                    item={item}
+                    onToggle={() =>
+                      void setStatus(item.id, item.status === 'hecha' ? 'pendiente' : 'hecha')
+                    }
+                    onEdit={() => startEditAgenda(item)}
+                    onDelete={() => {
+                      if (confirm(`¿Eliminar «${item.title}»?`)) void deleteItem(item.id)
+                    }}
+                  />
+                ))}
+              </ul>
+            )}
           </div>
-        ) : (
-          <h2 className="mb-3 text-lg font-bold">
-            {tab === 'hoy' ? 'Agenda de hoy' : 'Próximos días'}
-          </h2>
-        )}
-        {loading ? (
-          <p className="text-sm text-[var(--ink-soft)]">Cargando…</p>
-        ) : list.length === 0 ? (
-          <p className="text-sm text-[var(--ink-soft)]">
-            {isDiarias
-              ? 'Nada en casa todavía. Usa una sugerencia o añade una tarea diaria.'
-              : 'Nada por aquí. ¡Añade algo!'}
-          </p>
-        ) : (
-          <ul className={isDiarias ? 'flex flex-col gap-2' : 'divide-y divide-[var(--line)]'}>
-            {list.map((item) => (
-              <ItemRow
-                key={item.id}
-                item={item}
-                emphasizeDaily={isDiarias}
-                onToggle={() => void setStatus(item.id, item.status === 'hecha' ? 'pendiente' : 'hecha')}
-                onEdit={() => startEdit(item)}
-                onDelete={() => {
-                  if (confirm(`¿Eliminar «${item.title}»?`)) void deleteItem(item.id)
-                }}
-              />
-            ))}
-          </ul>
-        )}
+        </div>
       </section>
 
       {isAdult() ? (
@@ -392,12 +509,11 @@ export function HomePage() {
             Cuidados del bebé
           </h2>
           <p className="mb-3 text-xs text-[var(--ink-soft)]">
-            Solo adultos. Citas, tomas o recordatorios ligeros — sin cuenta para el bebé.
+            Solo adultos. Notas ligeras — sin cuenta para el bebé. Para «recoger al bebé» usa la
+            Agenda (cita).
           </p>
           {baby.length === 0 ? (
-            <p className="text-sm text-[var(--ink-soft)]">
-              Usa tipo «Bebé» al crear un pendiente para que aparezca aquí.
-            </p>
+            <p className="text-sm text-[var(--ink-soft)]">Sin notas de cuidados por ahora.</p>
           ) : (
             <ul className="divide-y divide-[var(--line)]">
               {baby.map((item) => (
@@ -407,7 +523,7 @@ export function HomePage() {
                   onToggle={() =>
                     void setStatus(item.id, item.status === 'hecha' ? 'pendiente' : 'hecha')
                   }
-                  onEdit={() => startEdit(item)}
+                  onEdit={() => undefined}
                   onDelete={() => {
                     if (confirm(`¿Eliminar «${item.title}»?`)) void deleteItem(item.id)
                   }}
@@ -475,10 +591,16 @@ function ItemRow({
 
   return (
     <li
-      className={`flex items-start gap-2 rounded-xl px-2 py-3 ${emphasizeDaily ? 'border border-[#fde68a] shadow-sm' : 'my-1'}`}
+      className={`flex items-start gap-2 rounded-xl px-2 py-3 ${emphasizeDaily ? 'border border-[#fde68a] bg-white/80 shadow-sm' : 'px-3'}`}
       style={{
         borderLeft: `4px solid ${color}`,
-        background: done ? (emphasizeDaily ? '#fffbeb' : 'transparent') : `${soft}99`,
+        background: emphasizeDaily
+          ? done
+            ? '#fffbeb'
+            : undefined
+          : done
+            ? 'transparent'
+            : `${soft}66`,
       }}
     >
       <button type="button" onClick={onToggle} className="mt-0.5 p-1" style={{ color }} aria-label="Marcar">

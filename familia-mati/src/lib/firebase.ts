@@ -12,7 +12,23 @@ const firebaseConfig = {
 }
 
 export const FINANZAS_URL =
-  (import.meta.env.VITE_FINANZAS_URL as string) || 'https://sebastian-tamayo.github.io/personal/'
+  (import.meta.env.VITE_FINANZAS_URL as string)?.trim() ||
+  'https://sebastian-tamayo.github.io/personal/'
+
+/** Always absolute Pages root (never /familia/). */
+export function financiasHref(): string {
+  const raw = FINANZAS_URL
+  try {
+    const u = new URL(raw, 'https://sebastian-tamayo.github.io')
+    // Guard against misconfigured env pointing at familia
+    if (u.pathname.includes('/familia')) {
+      return 'https://sebastian-tamayo.github.io/personal/'
+    }
+    return u.href.endsWith('/') ? u.href : `${u.href}/`
+  } catch {
+    return 'https://sebastian-tamayo.github.io/personal/'
+  }
+}
 
 export function isFirebaseConfigured(): boolean {
   return Boolean(
