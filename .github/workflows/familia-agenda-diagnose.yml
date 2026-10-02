@@ -1,0 +1,22 @@
+name: Familia agenda push diagnose
+on:
+  workflow_dispatch:
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: familia-mati
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install admin
+        run: npm install --no-save firebase-admin@13
+      - name: Diagnose
+        env:
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+          REMINDER_TZ: Europe/Madrid
+          REMINDER_WINDOW_MINUTES: '20'
+        run: node scripts/diagnose-agenda-push.mjs
