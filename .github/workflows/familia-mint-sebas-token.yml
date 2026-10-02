@@ -1,0 +1,48 @@
+# One-shot: mint Firebase custom token for local/UI screenshot (Sebas).
+# Manual only — do not schedule. Artifact deleted after download.
+name: Familia mint sebas custom token
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  mint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install admin
+        working-directory: familia-mati
+        run: npm install --no-save firebase-admin@13
+      - name: Mint token
+        working-directory: familia-mati
+        env:
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+        run: |
+          node <<'NODE'
+          const fs = require('fs')
+          const admin = require('firebase-admin')
+          ;(async () => {
+            const sa = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON)
+            if (!admin.apps.length) admin.initializeApp({ credential: admin.credential.cert(sa) })
+            const email = 'sbsesebeese@gmail.com'
+            const user = await admin.auth().getUserByEmail(email)
+            const token = await admin.auth().createCustomToken(user.uid, { memberKey: 'sebas' })
+            fs.writeFileSync('sebas-custom-token.txt', token)
+            console.log('uid', user.uid, 'token_len', token.length)
+          })().catch((e) => {
+            console.error(e)
+            process.exit(1)
+          })
+          NODE
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sebas-custom-token
+          path: familia-mati/sebas-custom-token.txt
+          retention-days: 1
