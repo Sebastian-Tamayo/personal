@@ -1,4 +1,20 @@
-<!doctype html><html lang="es"><head><meta charset="UTF-8"/><script>
-var p=location.pathname; if(p.indexOf('/personal/familia')===0){location.replace('/personal/familia/?p='+encodeURIComponent(p.replace(/^\/personal\/familia/, '')||'/')+location.search.replace(/^\?/,'&')+location.hash)}
-else {location.replace('/personal/?p='+encodeURIComponent(p.replace(/^\/personal/, '')||'/')+location.search.replace(/^\?/,'&')+location.hash)}
-</script></head><body></body></html>
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Finanzas Mati</title>
+    <script>
+      // Fallback SPA para GitHub Pages: reenvía la ruta al index.
+      var path = location.pathname.split('/').slice(1).join('/')
+      location.replace(
+        location.origin +
+          location.pathname.replace(/\/[^/]*$/, '/') +
+          '?p=/' +
+          encodeURIComponent('/' + path) +
+          location.search.replace(/^\?/, '&') +
+          location.hash
+      )
+    </script>
+  </head>
+  <body></body>
+</html>
