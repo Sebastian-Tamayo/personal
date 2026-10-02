@@ -1,0 +1,40 @@
+name: Familia one-shot custom token (Hellen)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  token:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: familia-mati
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install admin
+        run: npm install --no-save firebase-admin@13
+      - name: Mint custom token
+        env:
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+        run: |
+          node <<'NODE'
+          const fs = require('fs')
+          const admin = require('firebase-admin')
+          const sa = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON)
+          admin.initializeApp({ credential: admin.credential.cert(sa) })
+          const email = 'teodoroalvis31@gmail.com'
+          ;(async () => {
+            const u = await admin.auth().getUserByEmail(email)
+            const token = await admin.auth().createCustomToken(u.uid)
+            fs.writeFileSync('/tmp/hellen-custom-token.txt', token)
+            console.log(JSON.stringify({ ok: true, uid: u.uid, email: u.email, displayName: u.displayName }))
+          })().catch((e) => { console.error(e); process.exit(1) })
+          NODE
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hellen-custom-token
+          path: /tmp/hellen-custom-token.txt
+          retention-days: 1
