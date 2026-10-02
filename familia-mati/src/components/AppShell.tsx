@@ -39,7 +39,7 @@ export function AppShell({ children, title }: { children: ReactNode; title?: str
           <div className="min-w-0">
             <div className="brand mb-1 flex items-center gap-2 text-2xl font-semibold text-[var(--accent-deep)] sm:text-3xl">
               <Home className="size-7 shrink-0 text-[var(--accent)]" aria-hidden />
-              Familia Mati
+              Familia Hellen y Mati
             </div>
             {title ? <p className="text-sm text-[var(--ink-soft)]">{title}</p> : null}
             {profile ? (

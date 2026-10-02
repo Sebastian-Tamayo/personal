@@ -3,7 +3,7 @@
 /* eslint-disable no-undef */
 self.addEventListener('push', (event) => {
   let data = {
-    title: 'Familia Mati',
+    title: 'Familia Hellen y Mati',
     body: 'Tienes un aviso de la agenda.',
     url: '/personal/familia/',
   }
@@ -22,7 +22,7 @@ self.addEventListener('push', (event) => {
   }
 
   event.waitUntil(
-    self.registration.showNotification(data.title || 'Familia Mati', {
+    self.registration.showNotification(data.title || 'Familia Hellen y Mati', {
       body: data.body || '',
       icon: '/personal/familia/icons/pwa-192.png',
       badge: '/personal/familia/icons/pwa-192.png',

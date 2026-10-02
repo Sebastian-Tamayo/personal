@@ -199,7 +199,7 @@ export function PushOptIn() {
       ) : status === 'denied' ? (
         <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-900">
           Notificaciones bloqueadas. Actívalas en Ajustes del iPhone/Android para este sitio y vuelve
-          a abrir Familia Mati.
+          a abrir Familia Hellen y Mati.
         </p>
       ) : (
         <button

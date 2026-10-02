@@ -1,4 +1,4 @@
-# Closed-app mobile Web Push for Familia Mati Agenda (citas/compromisos) — NOT email,
+# Closed-app mobile Web Push for Familia Hellen y Mati Agenda (citas/compromisos) — NOT email,
 # NOT tareas diarias (chores). Fires ~every 15 min; per-profile leadMinutes + assignee targeting.
 #
 # Required repo secrets (Settings → Secrets and variables → Actions):

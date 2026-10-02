@@ -1,4 +1,4 @@
-# Familia Mati
+# Familia Hellen y Mati
 
 Organización diaria de la casa (Sebas, Lore, hija + perfil bebé).  
 Hermana de [Finanzas Mati](https://sebastian-tamayo.github.io/personal/).

@@ -44,7 +44,7 @@ export function AppShell({ children, title }: { children: ReactNode; title?: str
             className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-[#ea580c]/40 bg-gradient-to-r from-[#fff7ed] to-[#ffedd5] px-4 py-3 text-sm font-extrabold text-[#c2410c] shadow-sm transition hover:border-[#ea580c] hover:shadow"
           >
             <Home className="size-5" aria-hidden />
-            Ir a Familia Mati
+            Ir a Familia Hellen y Mati
             <span className="text-xs font-bold opacity-70">organización · tareas</span>
           </a>
         ) : null}

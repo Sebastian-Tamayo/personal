@@ -52,7 +52,7 @@ export default defineConfig({
       },
       workbox: {
         navigateFallback: '/personal/index.html',
-        // Familia Mati lives under /personal/familia/ — do not steal its navigations.
+        // Familia Hellen y Mati lives under /personal/familia/ — do not steal its navigations.
         navigateFallbackDenylist: [/^\/personal\/familia(?:\/|$)/],
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
       },

@@ -303,7 +303,7 @@ async function main() {
         continue
       }
 
-      const title = 'Familia Mati · aviso'
+      const title = 'Familia Hellen y Mati · aviso'
       const body = `${formatLeadBody(lead)}: ${item.title} (${when})`
       const payload = JSON.stringify({
         title,

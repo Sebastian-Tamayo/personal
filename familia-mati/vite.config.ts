@@ -19,9 +19,9 @@ export default defineConfig({
         'icons/pwa-maskable-512.png',
       ],
       manifest: {
-        name: 'Familia Mati',
-        short_name: 'Familia Mati',
-        description: 'Organización diaria de la familia Mati',
+        name: 'Familia Hellen y Mati',
+        short_name: 'Hellen y Mati',
+        description: 'Organización diaria de la familia Hellen y Mati',
         theme_color: '#ea580c',
         background_color: '#fff7ed',
         display: 'standalone',
