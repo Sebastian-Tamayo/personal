@@ -2,24 +2,22 @@
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/personal/familia/favicon.svg" />
-    <link rel="apple-touch-icon" href="/personal/familia/icons/apple-touch-icon.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#ea580c" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-title" content="Familia Mati" />
-    <meta name="description" content="Organización diaria de la familia Mati" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Nunito:wght@500;700;800&family=Fredoka:wght@500;600&display=swap"
-      rel="stylesheet"
-    />
     <title>Familia Mati</title>
-    <script type="module" crossorigin src="/personal/familia/assets/index-CKLpJvrn.js"></script>
-    <link rel="stylesheet" crossorigin href="/personal/familia/assets/index-BPe4z_jK.css">
-  <link rel="manifest" href="/personal/familia/manifest.webmanifest"><script id="vite-plugin-pwa:register-sw" src="/personal/familia/registerSW.js"></script></head>
-  <body>
-    <div id="root"></div>
-  </body>
+    <script>
+      // SPA fallback when GitHub Pages serves this file for missing familia routes.
+      ;(function () {
+        var base = '/personal/familia'
+        var rest = location.pathname.indexOf(base) === 0 ? location.pathname.slice(base.length) || '/' : '/'
+        location.replace(
+          location.origin +
+            base +
+            '/?p=' +
+            encodeURIComponent(rest) +
+            (location.search ? location.search.replace(/^\?/, '&') : '') +
+            location.hash,
+        )
+      })()
+    </script>
+  </head>
+  <body></body>
 </html>
