@@ -3,8 +3,9 @@ import { useState, type ReactNode } from 'react'
 import { financiasHref } from '../lib/firebase'
 import { useAuthStore } from '../store/authStore'
 import { FinanzasPinModal, isFinanzasUnlocked } from './FinanzasPinModal'
+import { PersonaPickerModal, PersonaSwitcher } from './PersonaPicker'
 
-/** Adults only (Sebas/Lore). Hellen (hijo) never sees Finanzas. */
+/** Adults only based on ACTIVE persona (Sebas/Lore). Hellen never — even on shared email. */
 function canSeeFinanzas(profile: { role: string; memberKey: string } | null): boolean {
   if (!profile) return false
   if (profile.memberKey === 'hellen') return false
@@ -47,6 +48,7 @@ export function AppShell({ children, title }: { children: ReactNode; title?: str
                 {user?.email ? ` · ${user.email}` : ''}
               </p>
             ) : null}
+            {user ? <PersonaSwitcher /> : null}
           </div>
           {user ? (
             <button
@@ -86,6 +88,8 @@ export function AppShell({ children, title }: { children: ReactNode; title?: str
           }}
         />
       ) : null}
+
+      <PersonaPickerModal />
     </div>
   )
 }

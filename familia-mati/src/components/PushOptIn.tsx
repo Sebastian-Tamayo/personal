@@ -18,9 +18,8 @@ import {
 import { useAuthStore } from '../store/authStore'
 
 /**
- * Per logged-in profile only (Sebas / Lore / Hellen).
- * No household-wide nag: each user sees Activar avisos until THEY enable;
- * then the prompt disappears for that user only. Others keep seeing it.
+ * Per active persona (Sebas / Lore / Hellen), not per Auth email alone.
+ * On shared Lore+Hellen account: Lore enabling does not hide Hellen's prompt.
  */
 export function PushOptIn() {
   const user = useAuthStore((s) => s.user)
@@ -34,19 +33,26 @@ export function PushOptIn() {
   const [sessionHidden, setSessionHidden] = useState(false)
   const [ready, setReady] = useState(false)
 
+  const uid = user?.uid
+  const memberKey = profile?.memberKey
+
   const refresh = useCallback(async () => {
-    if (!user?.uid) {
+    if (!uid || !memberKey) {
       setStatus('default')
       setReady(true)
       return
     }
-    const [s, active] = await Promise.all([getPushStatus(user.uid), isThisUserPushActive(user.uid)])
+    const [s, active] = await Promise.all([
+      getPushStatus(uid, memberKey),
+      isThisUserPushActive(uid, memberKey),
+    ])
     setStatus(active ? 'subscribed' : s)
-    setSessionHidden(isPushPromptSessionDismissed(user.uid))
+    setSessionHidden(isPushPromptSessionDismissed(uid, memberKey))
     setReady(true)
-  }, [user?.uid])
+  }, [uid, memberKey])
 
   useEffect(() => {
+    setReady(false)
     void refresh()
   }, [refresh])
 
@@ -72,7 +78,7 @@ export function PushOptIn() {
   }
 
   function onDismiss() {
-    dismissPushPromptSession(user!.uid)
+    dismissPushPromptSession(user!.uid, profile!.memberKey)
     setSessionHidden(true)
   }
 
@@ -89,7 +95,6 @@ export function PushOptIn() {
     }
   }
 
-  // After THIS user enables → prompt gone for them; lead-time settings remain
   if (status === 'subscribed') {
     return (
       <section
@@ -102,14 +107,10 @@ export function PushOptIn() {
           Avisar con antelación
         </h2>
         <p className="mb-3 text-sm font-semibold text-[#0c4a6e]/90">
-          Avisos activos para <span className="font-extrabold">{who}</span>. Elige cuánto antes quieres
-          el aviso (solo tu cuenta).
+          Avisos activos para <span className="font-extrabold">{who}</span>. Elige cuánto antes
+          (solo este perfil).
         </p>
-        <div
-          className="flex flex-wrap gap-2"
-          role="group"
-          aria-label="Antelación del aviso"
-        >
+        <div className="flex flex-wrap gap-2" role="group" aria-label="Antelación del aviso">
           {REMINDER_LEAD_PRESETS.map((p) => {
             const selected = p.minutes === leadMinutes
             return (
@@ -143,7 +144,6 @@ export function PushOptIn() {
     )
   }
 
-  // Soft-dismiss this visit for THIS user only
   if (sessionHidden) return null
 
   const unsupported = status === 'unsupported' || status === 'missing-vapid'
@@ -169,20 +169,16 @@ export function PushOptIn() {
         Activar avisos
       </h2>
       <p className="mb-2 text-sm font-semibold text-[#0c4a6e]">
-        Hola <span className="font-extrabold">{who}</span>: activa los avisos en{' '}
-        <span className="font-extrabold">tu cuenta</span> para recibirlos antes de tus citas (tú
-        eliges la antelación).
+        Perfil <span className="font-extrabold">{who}</span>: activa avisos para{' '}
+        <span className="font-extrabold">este perfil</span> (Lore y Hellen aprueban por separado).
       </p>
       <ul className="mb-3 list-disc space-y-1 pl-4 text-xs font-semibold text-[#0c4a6e]/90">
-        <li>
-          Solo para <span className="font-extrabold">ti</span> — Lore, Sebas y Hellen activan cada uno
-          por su lado.
-        </li>
+        <li>Mismo correo de Lore → dos perfiles; cada uno confirma avisos por su lado.</li>
         <li>
           Funciona con la app <span className="font-extrabold">cerrada</span> (PWA en el inicio).
         </li>
         <li>Solo te llegan los avisos asignados a ti (o a Todos).</li>
-        <li>Cuando des OK, este mensaje desaparece para tu perfil; los demás siguen viéndolo.</li>
+        <li>Al dar OK, el aviso desaparece solo para este perfil.</li>
       </ul>
       <p className="mb-3 text-[11px] leading-snug text-[#0c4a6e]/75">
         iPhone: iOS 16.4+ e icono en pantalla de inicio. Android: Chrome → Instalar / Añadir a inicio.
@@ -208,7 +204,7 @@ export function PushOptIn() {
           data-testid="push-enable-btn"
         >
           <Bell className="size-4" />
-          {busy ? 'Activando…' : 'Activar avisos'}
+          {busy ? 'Activando…' : `Activar avisos · ${who}`}
         </button>
       )}
 

@@ -117,15 +117,37 @@ export function formatLeadLabel(minutes: number): string {
   return preset?.label || `${minutes} min`
 }
 
+/** Login personas available on one Auth account (Lore+Hellen share email). */
+export type PersonaKey = 'sebas' | 'lore' | 'hellen'
+
+export interface PersonaSettings {
+  reminderLeadMinutes: number
+}
+
 export interface UserProfile {
   uid: string
   email: string
+  /** Active persona for this session (drives UI, gates, push). */
   memberKey: MemberKey
   role: UserRole
   displayName: string
-  /** Minutes before event to send push; per-user, default 120. */
+  /** Minutes before event for the active persona. */
   reminderLeadMinutes: number
+  /** Personas linked to this Auth uid (e.g. lore+hellen). */
+  personas: PersonaKey[]
+  /** Per-persona settings (lead time, etc.). */
+  personaSettings: Partial<Record<PersonaKey, PersonaSettings>>
   updatedAt: number
+}
+
+export function isPersonaKey(k: string | null | undefined): k is PersonaKey {
+  return k === 'sebas' || k === 'lore' || k === 'hellen'
+}
+
+export function defaultPersonaSettings(
+  lead: number = DEFAULT_REMINDER_LEAD_MINUTES,
+): PersonaSettings {
+  return { reminderLeadMinutes: normalizeReminderLeadMinutes(lead) }
 }
 
 export function todayISO(d = new Date()): string {

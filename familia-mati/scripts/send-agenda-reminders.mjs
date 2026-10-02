@@ -163,21 +163,32 @@ async function main() {
   const now = Date.now()
   const windowMs = windowMin * 60 * 1000
 
-  // Profile map uid → { memberKey, leadMinutes }
+  // Profile map uid → memberKey; lead per persona (personaSettings) or legacy reminderLeadMinutes
   const usersSnap = await db.collection('familia_users').get()
   const memberByUid = new Map()
   const leadByUid = new Map()
   const leadByMember = new Map()
+  const leadByUidMember = new Map() // `${uid}:${memberKey}` → minutes
   for (const doc of usersSnap.docs) {
     const d = doc.data() || {}
-    const key = normalizeAssignee(d.memberKey)
-    const lead = normalizeLeadMinutes(d.reminderLeadMinutes)
-    leadByUid.set(doc.id, lead)
-    if (key && key !== 'todos') {
-      memberByUid.set(doc.id, key)
-      // Prefer latest profile if multiple uids share a memberKey (shouldn't happen)
-      if (!leadByMember.has(key)) leadByMember.set(key, lead)
+    const key = normalizeAssignee(d.activeMemberKey || d.memberKey)
+    const legacyLead = normalizeLeadMinutes(d.reminderLeadMinutes)
+    leadByUid.set(doc.id, legacyLead)
+    if (key && key !== 'todos') memberByUid.set(doc.id, key)
+
+    const settings = d.personaSettings && typeof d.personaSettings === 'object' ? d.personaSettings : {}
+    const personas = Array.isArray(d.personas) ? d.personas : key ? [key] : []
+    for (const p of personas) {
+      const mk = normalizeAssignee(p)
+      if (!mk || mk === 'todos') continue
+      const entry = settings[mk]
+      const lead = normalizeLeadMinutes(
+        entry && typeof entry === 'object' ? entry.reminderLeadMinutes : legacyLead,
+      )
+      leadByUidMember.set(`${doc.id}:${mk}`, lead)
+      if (!leadByMember.has(mk)) leadByMember.set(mk, lead)
     }
+    if (key && key !== 'todos' && !leadByMember.has(key)) leadByMember.set(key, legacyLead)
   }
 
   const itemsSnap = await db.collection('familia_items').get()
@@ -211,15 +222,17 @@ async function main() {
       if (!memberKey || memberKey === 'todos') {
         memberKey = memberByUid.get(doc.id) || (uid ? memberByUid.get(uid) : null) || null
       }
+      const resolvedUid = uid || data.uid || null
       const leadMinutes =
-        (uid && leadByUid.get(uid)) ||
+        (resolvedUid && memberKey && leadByUidMember.get(`${resolvedUid}:${memberKey}`)) ||
+        (memberKey && leadByMember.get(memberKey)) ||
+        (resolvedUid && leadByUid.get(resolvedUid)) ||
         leadByUid.get(doc.id) ||
-        (memberKey ? leadByMember.get(memberKey) : null) ||
         DEFAULT_LEAD_MINUTES
       return {
         id: doc.id,
         ...data,
-        uid: uid || data.uid || null,
+        uid: resolvedUid,
         memberKey,
         leadMinutes: normalizeLeadMinutes(leadMinutes),
       }
@@ -228,6 +241,8 @@ async function main() {
       (s) =>
         s.enabled !== false &&
         !s.dead &&
+        !s.personaMirror &&
+        !s.legacyUidDoc &&
         s.endpoint &&
         s.keys?.p256dh &&
         s.keys?.auth &&

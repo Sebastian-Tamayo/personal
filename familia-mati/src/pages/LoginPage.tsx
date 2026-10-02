@@ -1,16 +1,17 @@
 import { useState, type FormEvent } from 'react'
 import { Navigate } from 'react-router-dom'
 import { AppShell } from '../components/AppShell'
-import { FAMILY_MEMBERS, type MemberKey } from '../lib/family'
+import { type MemberKey } from '../lib/family'
 import { useAuthStore } from '../store/authStore'
 
-const loginMembers = FAMILY_MEMBERS.filter((m) => m.canLogin)
+type RegisterChoice = 'sebas' | 'lore' | 'lore_hellen'
 
 export function LoginPage() {
   const user = useAuthStore((s) => s.user)
   const loading = useAuthStore((s) => s.loading)
   const error = useAuthStore((s) => s.error)
   const configured = useAuthStore((s) => s.configured)
+  const needsPersonaPick = useAuthStore((s) => s.needsPersonaPick)
   const login = useAuthStore((s) => s.login)
   const register = useAuthStore((s) => s.register)
   const clearError = useAuthStore((s) => s.clearError)
@@ -18,10 +19,12 @@ export function LoginPage() {
   const [mode, setMode] = useState<'login' | 'register'>('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [memberKey, setMemberKey] = useState<MemberKey>('sebas')
+  const [choice, setChoice] = useState<RegisterChoice>('sebas')
   const [submitting, setSubmitting] = useState(false)
 
-  if (configured && !loading && user) return <Navigate to="/" replace />
+  // Dual account still needs picker before home — stay on shell via ProtectedRoute home
+  if (configured && !loading && user && !needsPersonaPick) return <Navigate to="/" replace />
+  if (configured && !loading && user && needsPersonaPick) return <Navigate to="/" replace />
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
@@ -29,13 +32,45 @@ export function LoginPage() {
     setSubmitting(true)
     try {
       if (mode === 'login') await login(email, password)
-      else await register(email, password, memberKey)
+      else {
+        const memberKey: MemberKey = choice === 'sebas' ? 'sebas' : 'lore'
+        await register(email, password, memberKey, {
+          linkHellen: choice === 'lore_hellen',
+        })
+      }
     } catch {
       /* store */
     } finally {
       setSubmitting(false)
     }
   }
+
+  const chips: { id: RegisterChoice; label: string; emoji: string; hint: string; color: string; soft: string }[] = [
+    {
+      id: 'sebas',
+      label: 'Sebas',
+      emoji: '🔵',
+      hint: 'Su propio correo',
+      color: '#0369a1',
+      soft: '#bae6fd',
+    },
+    {
+      id: 'lore',
+      label: 'Lore',
+      emoji: '🩷',
+      hint: 'Luego puedes añadir Hellen',
+      color: '#be185d',
+      soft: '#fbcfe8',
+    },
+    {
+      id: 'lore_hellen',
+      label: 'Lore + Hellen',
+      emoji: '🩷🟣',
+      hint: 'Mismo correo · 2 perfiles',
+      color: '#6d28d9',
+      soft: '#ddd6fe',
+    },
+  ]
 
   return (
     <AppShell title="Organización diaria · Sebas, Lore y Hellen">
@@ -72,31 +107,35 @@ export function LoginPage() {
               <div>
                 <p className="mb-2 text-sm font-bold">Soy…</p>
                 <div className="grid grid-cols-3 gap-2">
-                  {loginMembers.map((m) => (
+                  {chips.map((c) => (
                     <button
-                      key={m.key}
+                      key={c.id}
                       type="button"
-                      onClick={() => setMemberKey(m.key)}
-                      className={`rounded-xl border px-2 py-3 text-center text-sm font-bold transition ${
-                        memberKey === m.key ? 'border-transparent shadow' : 'border-[var(--line)] bg-white/50'
+                      onClick={() => setChoice(c.id)}
+                      className={`rounded-xl border px-1.5 py-3 text-center text-xs font-bold transition ${
+                        choice === c.id ? 'border-transparent shadow' : 'border-[var(--line)] bg-white/50'
                       }`}
                       style={
-                        memberKey === m.key
-                          ? { background: m.colorSoft, color: m.color }
-                          : undefined
+                        choice === c.id ? { background: c.soft, color: c.color } : undefined
                       }
                     >
-                      <span className="block text-xl">{m.emoji}</span>
-                      {m.name}
+                      <span className="mb-0.5 block text-lg">{c.emoji}</span>
+                      {c.label}
                     </button>
                   ))}
                 </div>
-                <p className="mt-2 text-xs text-[var(--ink-soft)]">
-                  3 cuentas distintas (Sebas, Lore, Hellen). Hellen necesita su propio correo — Firebase
-                  no permite dos cuentas con el mismo email. El bebé no inicia sesión.
+                <p className="mt-2 text-xs leading-snug text-[var(--ink-soft)]">
+                  {chips.find((c) => c.id === choice)?.hint}. Firebase exige un email único: Lore y
+                  Hellen comparten el correo de Lore (2 perfiles). Sebas usa el suyo. El bebé no
+                  inicia sesión.
                 </p>
               </div>
-            ) : null}
+            ) : (
+              <p className="rounded-xl bg-[#fdf2f8] px-3 py-2 text-xs font-semibold text-[#9d174d]">
+                Lore / Hellen: entra con el correo de Lore → elige perfil. Avisos se activan por
+                separado.
+              </p>
+            )}
 
             <label className="flex flex-col gap-1 text-sm">
               <span className="font-bold">Correo</span>
