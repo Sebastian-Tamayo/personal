@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { AppShell } from '../components/AppShell'
 import {
   FAMILY_MEMBERS,
+  KIND_COLORS,
   formatDateLabel,
   kindLabel,
   memberByKey,
@@ -351,10 +352,14 @@ function ItemRow({
   const member = item.assignee === 'todos' ? null : memberByKey(item.assignee)
   const color = member?.color || '#ea580c'
   const soft = member?.colorSoft || '#ffedd5'
+  const kindStyle = KIND_COLORS[item.kind]
   const done = item.status === 'hecha'
 
   return (
-    <li className="flex items-start gap-2 py-3">
+    <li
+      className="my-1 flex items-start gap-2 rounded-xl px-2 py-3"
+      style={{ borderLeft: `4px solid ${color}`, background: done ? 'transparent' : `${soft}99` }}
+    >
       <button type="button" onClick={onToggle} className="mt-0.5 p-1" style={{ color }} aria-label="Toggle">
         {done ? <CheckCircle2 className="size-5" /> : <Circle className="size-5" />}
       </button>
@@ -363,7 +368,7 @@ function ItemRow({
           <p className={`font-bold ${done ? 'line-through opacity-60' : ''}`}>{item.title}</p>
           <span
             className="rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase"
-            style={{ background: soft, color }}
+            style={{ background: kindStyle.soft, color: kindStyle.color }}
           >
             {kindLabel(item.kind)}
           </span>
@@ -371,7 +376,7 @@ function ItemRow({
             className="rounded-full px-2 py-0.5 text-[10px] font-extrabold"
             style={{ background: soft, color }}
           >
-            {member ? `${member.emoji} ${member.name}` : 'Todos'}
+            {member ? `${member.emoji} ${member.name}` : '👥 Todos'}
           </span>
         </div>
         {item.notes ? <p className="mt-0.5 text-sm text-[var(--ink-soft)]">{item.notes}</p> : null}

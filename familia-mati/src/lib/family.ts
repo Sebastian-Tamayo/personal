@@ -1,4 +1,4 @@
-export type MemberKey = 'sebas' | 'lore' | 'hija' | 'bebe'
+export type MemberKey = 'sebas' | 'lore' | 'hellen' | 'bebe'
 export type UserRole = 'adulto' | 'hijo'
 export type ItemKind = 'cita' | 'tarea' | 'chore' | 'bebe'
 export type ItemStatus = 'pendiente' | 'hecha'
@@ -14,16 +14,16 @@ export interface FamilyMember {
   canLogin: boolean
 }
 
-/** 4 visual profiles; 3 can log in */
+/** 4 visual profiles; 3 can log in (Sebas, Lore, Hellen). Baby = visual only. */
 export const FAMILY_MEMBERS: FamilyMember[] = [
   {
     key: 'sebas',
     name: 'Sebas',
     short: 'S',
     role: 'adulto',
-    color: '#0284c7',
-    colorSoft: '#e0f2fe',
-    emoji: '👨',
+    color: '#0369a1',
+    colorSoft: '#bae6fd',
+    emoji: '🔵',
     canLogin: true,
   },
   {
@@ -31,35 +31,53 @@ export const FAMILY_MEMBERS: FamilyMember[] = [
     name: 'Lore',
     short: 'L',
     role: 'adulto',
-    color: '#db2777',
-    colorSoft: '#fce7f3',
-    emoji: '👩',
+    color: '#be185d',
+    colorSoft: '#fbcfe8',
+    emoji: '🩷',
     canLogin: true,
   },
   {
-    key: 'hija',
-    name: 'Hija',
-    short: 'H',
+    key: 'hellen',
+    name: 'Hellen',
+    short: 'He',
     role: 'hijo',
-    color: '#7c3aed',
-    colorSoft: '#ede9fe',
-    emoji: '👧',
+    color: '#6d28d9',
+    colorSoft: '#ddd6fe',
+    emoji: '🟣',
     canLogin: true,
   },
   {
     key: 'bebe',
-    name: 'Bebe',
+    name: 'Bebé',
     short: 'B',
     role: 'bebe',
-    color: '#ea580c',
-    colorSoft: '#ffedd5',
-    emoji: '👶',
+    color: '#c2410c',
+    colorSoft: '#fed7aa',
+    emoji: '🧡',
     canLogin: false,
   },
 ]
 
+/** Normalize legacy assignee keys (hija → hellen). */
+export function normalizeMemberKey(key: string | null | undefined): MemberKey | 'todos' | null {
+  if (!key) return null
+  if (key === 'todos') return 'todos'
+  if (key === 'hija') return 'hellen'
+  if (key === 'sebas' || key === 'lore' || key === 'hellen' || key === 'bebe') return key
+  return null
+}
+
 export function memberByKey(key: string | null | undefined): FamilyMember | undefined {
-  return FAMILY_MEMBERS.find((m) => m.key === key)
+  const n = normalizeMemberKey(key)
+  if (!n || n === 'todos') return undefined
+  return FAMILY_MEMBERS.find((m) => m.key === n)
+}
+
+export const KIND_COLORS: Record<ItemKind, { color: string; soft: string }> = {
+  cita: { color: '#0f766e', soft: '#ccfbf1' },
+  tarea: { color: '#1d4ed8', soft: '#dbeafe' },
+  chore: { color: '#a16207', soft: '#fef08a' },
+  bebe: { color: '#c2410c', soft: '#ffedd5' },
 }
 
 export interface OrgItem {
@@ -69,9 +87,7 @@ export interface OrgItem {
   kind: ItemKind
   status: ItemStatus
   assignee: MemberKey | 'todos'
-  /** yyyy-mm-dd or empty */
   date: string
-  /** HH:mm optional */
   time: string
   createdAt: number
   updatedAt: number

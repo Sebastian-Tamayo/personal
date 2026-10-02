@@ -38,7 +38,7 @@ export function LoginPage() {
   }
 
   return (
-    <AppShell title="Organización diaria · Sebas, Lore e hija">
+    <AppShell title="Organización diaria · Sebas, Lore y Hellen">
       {!configured ? (
         <section className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-5 shadow-[var(--shadow)]">
           <h2 className="mb-2 text-lg font-bold">Firebase no configurado</h2>
@@ -92,7 +92,8 @@ export function LoginPage() {
                   ))}
                 </div>
                 <p className="mt-2 text-xs text-[var(--ink-soft)]">
-                  El bebé no inicia sesión; solo aparece en cuidados.
+                  3 cuentas distintas (Sebas, Lore, Hellen). Hellen necesita su propio correo — Firebase
+                  no permite dos cuentas con el mismo email. El bebé no inicia sesión.
                 </p>
               </div>
             ) : null}

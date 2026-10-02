@@ -7,7 +7,7 @@ import {
 } from 'firebase/auth'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
 import { create } from 'zustand'
-import { memberByKey, type MemberKey, type UserProfile, type UserRole } from '../lib/family'
+import { memberByKey, normalizeMemberKey, type MemberKey, type UserProfile, type UserRole } from '../lib/family'
 import { getDb, getFirebaseAuth, isFirebaseConfigured } from '../lib/firebase'
 
 interface AuthState {
@@ -46,14 +46,29 @@ async function loadOrCreateProfile(user: User, memberKey?: MemberKey): Promise<U
   const snap = await getDoc(ref)
   if (snap.exists()) {
     const d = snap.data()
-    return {
+    const rawKey = String(d.memberKey || 'sebas')
+    const normalized = normalizeMemberKey(rawKey === 'hija' ? 'hellen' : rawKey)
+    const memberKeyResolved: MemberKey =
+      normalized && normalized !== 'todos' ? normalized : 'sebas'
+    const member = memberByKey(memberKeyResolved)
+    const displayFromDoc = String(d.displayName || '')
+    const displayName =
+      displayFromDoc === 'Hija' || !displayFromDoc
+        ? member?.name || 'Sebas'
+        : displayFromDoc
+    const profile: UserProfile = {
       uid: user.uid,
       email: String(d.email || user.email || ''),
-      memberKey: (d.memberKey as MemberKey) || 'sebas',
-      role: (d.role as UserRole) || 'adulto',
-      displayName: String(d.displayName || ''),
+      memberKey: memberKeyResolved,
+      role: (d.role as UserRole) || (member?.role === 'hijo' ? 'hijo' : 'adulto'),
+      displayName,
       updatedAt: Number(d.updatedAt) || Date.now(),
     }
+    // Persist rename if needed
+    if (rawKey === 'hija' || displayFromDoc === 'Hija') {
+      await setDoc(ref, { ...profile, updatedAt: Date.now() }, { merge: true })
+    }
+    return profile
   }
   const key = memberKey && memberKey !== 'bebe' ? memberKey : 'sebas'
   const member = memberByKey(key)!

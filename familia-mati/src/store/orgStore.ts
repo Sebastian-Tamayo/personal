@@ -50,13 +50,20 @@ interface OrgState {
 let unsub: Unsubscribe | null = null
 
 function mapItem(id: string, data: Record<string, unknown>): OrgItem {
+  const rawAssignee = String(data.assignee ?? 'todos')
+  const normalized =
+    rawAssignee === 'todos'
+      ? 'todos'
+      : rawAssignee === 'hija'
+        ? 'hellen'
+        : (rawAssignee as MemberKey | 'todos')
   return {
     id,
     title: String(data.title ?? ''),
     notes: String(data.notes ?? ''),
     kind: (data.kind as ItemKind) || 'tarea',
     status: data.status === 'hecha' ? 'hecha' : 'pendiente',
-    assignee: (data.assignee as MemberKey | 'todos') || 'todos',
+    assignee: normalized || 'todos',
     date: String(data.date ?? ''),
     time: String(data.time ?? ''),
     createdAt: Number(data.createdAt) || 0,
