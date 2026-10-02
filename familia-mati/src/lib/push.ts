@@ -2,8 +2,17 @@ import { deleteDoc, doc, getDoc, setDoc } from 'firebase/firestore'
 import { getDb, isFirebaseConfigured } from './firebase'
 
 const VAPID_PUBLIC = (import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined)?.trim() || ''
-const LOCAL_DONE_KEY = 'familia-mati-push-enabled'
-const SESSION_DISMISS_KEY = 'familia-mati-push-dismissed'
+/** Legacy device-wide key — migrated away; kept only to clear old state. */
+const LEGACY_LOCAL_DONE_KEY = 'familia-mati-push-enabled'
+const LEGACY_SESSION_DISMISS_KEY = 'familia-mati-push-dismissed'
+
+function localDoneKey(uid: string) {
+  return `familia-mati-push-enabled:${uid}`
+}
+
+function sessionDismissKey(uid: string) {
+  return `familia-mati-push-dismissed:${uid}`
+}
 
 export function isPushConfigured(): boolean {
   return Boolean(
@@ -26,41 +35,48 @@ async function sha256Hex(text: string): Promise<string> {
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('')
 }
 
-export function markPushEnabledLocally(endpoint: string) {
+/** Mark push enabled for THIS logged-in user only (not household-wide). */
+export function markPushEnabledLocally(uid: string, endpoint: string) {
   try {
-    localStorage.setItem(LOCAL_DONE_KEY, endpoint.slice(-32))
+    localStorage.setItem(localDoneKey(uid), endpoint.slice(-32))
+    // Clear legacy global flag so other profiles are not auto-hidden
+    localStorage.removeItem(LEGACY_LOCAL_DONE_KEY)
   } catch {
     /* ignore */
   }
 }
 
-export function clearPushEnabledLocally() {
+export function clearPushEnabledLocally(uid?: string) {
   try {
-    localStorage.removeItem(LOCAL_DONE_KEY)
+    if (uid) localStorage.removeItem(localDoneKey(uid))
+    localStorage.removeItem(LEGACY_LOCAL_DONE_KEY)
   } catch {
     /* ignore */
   }
 }
 
-export function isPushEnabledLocally(): boolean {
+/** True only if THIS user previously enabled on this browser. */
+export function isPushEnabledLocally(uid: string): boolean {
   try {
-    return Boolean(localStorage.getItem(LOCAL_DONE_KEY))
+    return Boolean(localStorage.getItem(localDoneKey(uid)))
   } catch {
     return false
   }
 }
 
-export function dismissPushPromptSession() {
+/** Soft-dismiss for THIS user for this visit only. */
+export function dismissPushPromptSession(uid: string) {
   try {
-    sessionStorage.setItem(SESSION_DISMISS_KEY, '1')
+    sessionStorage.setItem(sessionDismissKey(uid), '1')
+    sessionStorage.removeItem(LEGACY_SESSION_DISMISS_KEY)
   } catch {
     /* ignore */
   }
 }
 
-export function isPushPromptSessionDismissed(): boolean {
+export function isPushPromptSessionDismissed(uid: string): boolean {
   try {
-    return sessionStorage.getItem(SESSION_DISMISS_KEY) === '1'
+    return sessionStorage.getItem(sessionDismissKey(uid)) === '1'
   } catch {
     return false
   }
@@ -87,53 +103,62 @@ async function getServiceWorkerRegistration(timeoutMs = 4000): Promise<ServiceWo
   }
 }
 
-/** True when this browser/device is fully opted in (permission + live subscription). */
-export async function isThisDevicePushActive(): Promise<boolean> {
+/**
+ * True when THIS logged-in user has successfully enabled push on this browser.
+ * Other household profiles still see Activar avisos until they enable themselves.
+ */
+export async function isThisUserPushActive(uid: string): Promise<boolean> {
+  if (!uid) return false
   if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) {
     return false
   }
   if (Notification.permission !== 'granted') return false
-  if (isPushEnabledLocally()) {
-    // Local success flag: don't nag even if SW is still waking up
+
+  if (isPushEnabledLocally(uid)) {
     return true
   }
+
+  // Live subscription only counts if Firestore ties it to this uid
   try {
     const reg = await getServiceWorkerRegistration()
     if (!reg) return false
     const sub = await reg.pushManager.getSubscription()
     if (!sub?.endpoint) return false
-    markPushEnabledLocally(sub.endpoint)
-    return true
+    const deviceId = await sha256Hex(sub.endpoint)
+    const snap = await getDoc(doc(getDb(), 'familia_push_subs', deviceId))
+    if (snap.exists()) {
+      const data = snap.data() || {}
+      if (data.enabled !== false && !data.dead && String(data.uid || '') === uid) {
+        markPushEnabledLocally(uid, sub.endpoint)
+        return true
+      }
+    }
+    // Legacy uid-keyed doc
+    const legacy = await getDoc(doc(getDb(), 'familia_push_subs', uid))
+    if (legacy.exists()) {
+      const data = legacy.data() || {}
+      if (data.enabled !== false && !data.dead && data.endpoint) {
+        markPushEnabledLocally(uid, String(data.endpoint))
+        return true
+      }
+    }
   } catch {
-    return false
+    /* ignore */
   }
+  return false
 }
 
-export async function getPushStatus(uid?: string | null): Promise<PushStatus> {
+export async function getPushStatus(uid: string): Promise<PushStatus> {
   if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) {
     return 'unsupported'
   }
   if (!VAPID_PUBLIC) return 'missing-vapid'
   if (Notification.permission === 'denied') return 'denied'
 
-  if (isPushEnabledLocally() && Notification.permission === 'granted') {
+  if (uid && (await isThisUserPushActive(uid))) {
     return 'subscribed'
   }
 
-  try {
-    const reg = await getServiceWorkerRegistration()
-    if (reg) {
-      const sub = await reg.pushManager.getSubscription()
-      if (Notification.permission === 'granted' && sub?.endpoint) {
-        markPushEnabledLocally(sub.endpoint)
-        return 'subscribed'
-      }
-    }
-  } catch {
-    /* ignore */
-  }
-
-  void uid
   return Notification.permission === 'granted' ? 'unsubscribed' : 'default'
 }
 
@@ -192,9 +217,10 @@ export async function enablePushNotifications(uid: string, memberKey: string): P
     { merge: true },
   )
 
-  markPushEnabledLocally(endpoint)
+  markPushEnabledLocally(uid, endpoint)
   try {
-    sessionStorage.removeItem(SESSION_DISMISS_KEY)
+    sessionStorage.removeItem(sessionDismissKey(uid))
+    sessionStorage.removeItem(LEGACY_SESSION_DISMISS_KEY)
   } catch {
     /* ignore */
   }
@@ -207,7 +233,13 @@ export async function disablePushNotifications(uid: string): Promise<void> {
     const sub = await reg.pushManager.getSubscription()
     if (sub) {
       endpoint = sub.endpoint
-      await sub.unsubscribe()
+      // Only unsubscribe if this device sub belongs to this uid
+      const deviceId = await sha256Hex(endpoint)
+      const snap = await getDoc(doc(getDb(), 'familia_push_subs', deviceId))
+      const owner = snap.exists() ? String(snap.data()?.uid || '') : ''
+      if (!owner || owner === uid) {
+        await sub.unsubscribe()
+      }
     }
   } catch {
     /* ignore */
@@ -216,7 +248,10 @@ export async function disablePushNotifications(uid: string): Promise<void> {
   if (endpoint) {
     try {
       const deviceId = await sha256Hex(endpoint)
-      await deleteDoc(doc(getDb(), 'familia_push_subs', deviceId))
+      const snap = await getDoc(doc(getDb(), 'familia_push_subs', deviceId))
+      if (snap.exists() && String(snap.data()?.uid || '') === uid) {
+        await deleteDoc(doc(getDb(), 'familia_push_subs', deviceId))
+      }
     } catch {
       /* ignore */
     }
@@ -231,5 +266,5 @@ export async function disablePushNotifications(uid: string): Promise<void> {
     /* ignore */
   }
 
-  clearPushEnabledLocally()
+  clearPushEnabledLocally(uid)
 }

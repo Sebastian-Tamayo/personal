@@ -12,14 +12,15 @@ import {
   getPushStatus,
   isPushConfigured,
   isPushPromptSessionDismissed,
-  isThisDevicePushActive,
+  isThisUserPushActive,
   type PushStatus,
 } from '../lib/push'
 import { useAuthStore } from '../store/authStore'
 
 /**
- * - Until THIS device enables push: persistent "Activar avisos" prompt.
- * - After enable: prompt gone; "Avisar con antelación" settings stay visible.
+ * Per logged-in profile only (Sebas / Lore / Hellen).
+ * No household-wide nag: each user sees Activar avisos until THEY enable;
+ * then the prompt disappears for that user only. Others keep seeing it.
  */
 export function PushOptIn() {
   const user = useAuthStore((s) => s.user)
@@ -39,9 +40,9 @@ export function PushOptIn() {
       setReady(true)
       return
     }
-    const [s, active] = await Promise.all([getPushStatus(user.uid), isThisDevicePushActive()])
+    const [s, active] = await Promise.all([getPushStatus(user.uid), isThisUserPushActive(user.uid)])
     setStatus(active ? 'subscribed' : s)
-    setSessionHidden(isPushPromptSessionDismissed())
+    setSessionHidden(isPushPromptSessionDismissed(user.uid))
     setReady(true)
   }, [user?.uid])
 
@@ -51,6 +52,7 @@ export function PushOptIn() {
 
   if (!user || !profile || !ready) return null
 
+  const who = profile.displayName || profile.memberKey
   const leadMinutes = normalizeReminderLeadMinutes(
     profile.reminderLeadMinutes ?? DEFAULT_REMINDER_LEAD_MINUTES,
   )
@@ -70,7 +72,7 @@ export function PushOptIn() {
   }
 
   function onDismiss() {
-    dismissPushPromptSession()
+    dismissPushPromptSession(user!.uid)
     setSessionHidden(true)
   }
 
@@ -87,19 +89,21 @@ export function PushOptIn() {
     }
   }
 
-  // After real enable on this device → prompt gone; show lead-time settings
+  // After THIS user enables → prompt gone for them; lead-time settings remain
   if (status === 'subscribed') {
     return (
       <section
         className="rounded-2xl border border-[#7dd3fc] bg-gradient-to-br from-[#f0f9ff] to-[#e0f2fe]/80 p-4 shadow-[var(--shadow)]"
         data-testid="avisos-lead-settings"
+        data-avisos-user={profile.memberKey}
       >
         <h2 className="mb-1 flex items-center gap-2 text-lg font-extrabold text-[#0369a1]">
           <Clock3 className="size-5" aria-hidden />
           Avisar con antelación
         </h2>
         <p className="mb-3 text-sm font-semibold text-[#0c4a6e]/90">
-          Avisos activos en este móvil. Elige cuánto antes quieres el aviso (solo para ti).
+          Avisos activos para <span className="font-extrabold">{who}</span>. Elige cuánto antes quieres
+          el aviso (solo tu cuenta).
         </p>
         <div
           className="flex flex-wrap gap-2"
@@ -139,7 +143,7 @@ export function PushOptIn() {
     )
   }
 
-  // Soft-dismiss this visit only
+  // Soft-dismiss this visit for THIS user only
   if (sessionHidden) return null
 
   const unsupported = status === 'unsupported' || status === 'missing-vapid'
@@ -148,6 +152,7 @@ export function PushOptIn() {
     <section
       className="relative rounded-2xl border-2 border-[#0284c7] bg-gradient-to-br from-[#e0f2fe] to-[#7dd3fc]/55 p-4 shadow-[var(--shadow)] ring-2 ring-[#0284c7]/20"
       data-testid="push-opt-in"
+      data-avisos-user={profile.memberKey}
     >
       <button
         type="button"
@@ -164,15 +169,20 @@ export function PushOptIn() {
         Activar avisos
       </h2>
       <p className="mb-2 text-sm font-semibold text-[#0c4a6e]">
-        Actívalos en <span className="font-extrabold">este móvil</span> para recibir avisos antes
-        de tus citas y compromisos (tú eliges la antelación).
+        Hola <span className="font-extrabold">{who}</span>: activa los avisos en{' '}
+        <span className="font-extrabold">tu cuenta</span> para recibirlos antes de tus citas (tú
+        eliges la antelación).
       </p>
       <ul className="mb-3 list-disc space-y-1 pl-4 text-xs font-semibold text-[#0c4a6e]/90">
+        <li>
+          Solo para <span className="font-extrabold">ti</span> — Lore, Sebas y Hellen activan cada uno
+          por su lado.
+        </li>
         <li>
           Funciona con la app <span className="font-extrabold">cerrada</span> (PWA en el inicio).
         </li>
         <li>Solo te llegan los avisos asignados a ti (o a Todos).</li>
-        <li>Cuando des OK, este mensaje desaparece en este dispositivo.</li>
+        <li>Cuando des OK, este mensaje desaparece para tu perfil; los demás siguen viéndolo.</li>
       </ul>
       <p className="mb-3 text-[11px] leading-snug text-[#0c4a6e]/75">
         iPhone: iOS 16.4+ e icono en pantalla de inicio. Android: Chrome → Instalar / Añadir a inicio.
