@@ -11,7 +11,13 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'icons/apple-touch-icon.png'],
+      includeAssets: [
+        'favicon.svg',
+        'icons/apple-touch-icon.png',
+        'icons/pwa-192.png',
+        'icons/pwa-512.png',
+        'icons/pwa-maskable-512.png',
+      ],
       manifest: {
         name: 'Familia Mati',
         short_name: 'Familia Mati',
@@ -24,8 +30,8 @@ export default defineConfig({
         start_url: '/personal/familia/',
         scope: '/personal/familia/',
         icons: [
-          { src: 'icons/pwa-192.png', sizes: '192x192', type: 'image/png' },
-          { src: 'icons/pwa-512.png', sizes: '512x512', type: 'image/png' },
+          { src: 'icons/pwa-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: 'icons/pwa-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
           {
             src: 'icons/pwa-maskable-512.png',
             sizes: '512x512',
