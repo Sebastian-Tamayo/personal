@@ -391,6 +391,7 @@ async function main() {
               keys: { p256dh: s.keys.p256dh, auth: s.keys.auth },
             },
             payload,
+            { TTL: 300, urgency: 'high' },
           )
           okCount++
           sent++
