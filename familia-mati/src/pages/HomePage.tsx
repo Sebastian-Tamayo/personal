@@ -1,7 +1,8 @@
-import { Baby, CheckCircle2, Circle, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { Baby, CheckCircle2, Circle, Home, Pencil, Plus, Trash2, X } from 'lucide-react'
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { AppShell } from '../components/AppShell'
 import {
+  DAILY_TASK_SUGGESTIONS,
   FAMILY_MEMBERS,
   KIND_COLORS,
   formatDateLabel,
@@ -14,6 +15,8 @@ import {
 } from '../lib/family'
 import { useAuthStore } from '../store/authStore'
 import { useOrgStore } from '../store/orgStore'
+
+type TabId = 'hoy' | 'proximos' | 'diarias'
 
 export function HomePage() {
   const user = useAuthStore((s) => s.user)!
@@ -37,7 +40,7 @@ export function HomePage() {
   const [time, setTime] = useState('')
   const [editing, setEditing] = useState<OrgItem | null>(null)
   const [busy, setBusy] = useState(false)
-  const [tab, setTab] = useState<'hoy' | 'proximos' | 'chores'>('hoy')
+  const [tab, setTab] = useState<TabId>('hoy')
 
   useEffect(() => subscribe(), [subscribe])
 
@@ -52,42 +55,62 @@ export function HomePage() {
     })
   }, [items, filterMember, isAdult])
 
-  const hoy = filtered.filter((i) => i.date === today || (!i.date && i.status === 'pendiente'))
-  const proximos = filtered.filter((i) => i.date > today)
-  const chores = filtered.filter((i) => i.kind === 'chore')
+  // Agenda = citas / tareas / bebé (no diarias — esas van a su sección)
+  const agenda = filtered.filter((i) => i.kind !== 'chore')
+  const hoy = agenda.filter((i) => i.date === today || (!i.date && i.status === 'pendiente'))
+  const proximos = agenda.filter((i) => i.date > today)
+  const diarias = filtered.filter((i) => i.kind === 'chore')
+  const diariasHoy = diarias.filter(
+    (i) => i.date === today || !i.date || (i.date < today && i.status === 'pendiente'),
+  )
   const baby = filtered.filter((i) => i.kind === 'bebe')
 
-  const list =
-    tab === 'hoy' ? hoy : tab === 'proximos' ? proximos : chores
+  const list = tab === 'hoy' ? hoy : tab === 'proximos' ? proximos : diariasHoy
+  const isDiarias = tab === 'diarias'
 
   function reset() {
     setTitle('')
     setNotes('')
-    setKind('tarea')
+    setKind(isDiarias ? 'chore' : 'tarea')
     setAssignee('todos')
     setDate(todayISO())
     setTime('')
     setEditing(null)
   }
 
+  function switchTab(id: TabId) {
+    setTab(id)
+    setEditing(null)
+    setTitle('')
+    setNotes('')
+    setKind(id === 'diarias' ? 'chore' : 'tarea')
+    setAssignee('todos')
+    setDate(todayISO())
+    setTime('')
+  }
+
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
     if (!title.trim()) return
-    if (!isAdult() && kind === 'bebe') return
+    const finalKind = isDiarias && !editing ? 'chore' : kind
+    if (!isAdult() && finalKind === 'bebe') return
     setBusy(true)
     try {
       if (editing) {
         await updateItem(editing.id, {
           title,
           notes,
-          kind,
+          kind: finalKind,
           assignee,
           date,
           time,
           status: editing.status,
         })
       } else {
-        await addItem({ title, notes, kind, assignee, date, time }, user.uid)
+        await addItem(
+          { title, notes, kind: finalKind, assignee, date: date || todayISO(), time },
+          user.uid,
+        )
       }
       reset()
     } finally {
@@ -103,11 +126,33 @@ export function HomePage() {
     setAssignee(item.assignee)
     setDate(item.date || todayISO())
     setTime(item.time)
+    if (item.kind === 'chore') setTab('diarias')
   }
 
+  async function quickAddDaily(label: string) {
+    setBusy(true)
+    try {
+      await addItem(
+        {
+          title: label,
+          notes: '',
+          kind: 'chore',
+          assignee: 'todos',
+          date: todayISO(),
+          time: '',
+        },
+        user.uid,
+      )
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const doneCount = diariasHoy.filter((i) => i.status === 'hecha').length
+  const pendingCount = diariasHoy.length - doneCount
+
   return (
-    <AppShell title="Hoy, chores y cuidados · en color">
-      {/* Profiles */}
+    <AppShell title="Agenda, tareas diarias y cuidados">
       <section className="animate-rise flex gap-2 overflow-x-auto pb-1">
         <FilterChip
           active={filterMember === 'todos'}
@@ -135,21 +180,24 @@ export function HomePage() {
         </p>
       ) : null}
 
-      {/* Tabs */}
       <div className="flex gap-2 rounded-xl bg-black/5 p-1">
         {(
           [
             ['hoy', 'Hoy'],
             ['proximos', 'Próximos'],
-            ['chores', 'Chores'],
+            ['diarias', 'Tareas diarias'],
           ] as const
         ).map(([id, label]) => (
           <button
             key={id}
             type="button"
-            onClick={() => setTab(id)}
-            className={`flex-1 rounded-lg px-2 py-2 text-sm font-extrabold ${
-              tab === id ? 'bg-white text-[var(--accent-deep)] shadow-sm' : 'text-[var(--ink-soft)]'
+            onClick={() => switchTab(id)}
+            className={`flex-1 rounded-lg px-1.5 py-2 text-xs font-extrabold sm:text-sm ${
+              tab === id
+                ? id === 'diarias'
+                  ? 'bg-[#fef08a] text-[#854d0e] shadow-sm'
+                  : 'bg-white text-[var(--accent-deep)] shadow-sm'
+                : 'text-[var(--ink-soft)]'
             }`}
           >
             {label}
@@ -158,14 +206,46 @@ export function HomePage() {
       </div>
 
       {/* Form */}
-      <section className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-4 shadow-[var(--shadow)]">
-        <h2 className="mb-3 text-lg font-bold">{editing ? 'Editar' : 'Nuevo pendiente'}</h2>
+      <section
+        className={`rounded-2xl border p-4 shadow-[var(--shadow)] ${
+          isDiarias
+            ? 'border-[#ca8a04]/40 bg-gradient-to-br from-[#fef9c3] to-[#fef08a]/60'
+            : 'border-[var(--line)] bg-[var(--surface)]'
+        }`}
+      >
+        <h2 className="mb-1 text-lg font-bold">
+          {editing
+            ? 'Editar'
+            : isDiarias
+              ? 'Nueva tarea diaria'
+              : 'Nuevo pendiente'}
+        </h2>
+        {isDiarias && !editing ? (
+          <p className="mb-3 text-xs font-semibold text-[#854d0e]">
+            De casa: barrer, aspirar, comida… asígnala a Sebas, Lore o Hellen.
+          </p>
+        ) : null}
+        {isDiarias && !editing ? (
+          <div className="mb-3 flex flex-wrap gap-1.5">
+            {DAILY_TASK_SUGGESTIONS.map((s) => (
+              <button
+                key={s}
+                type="button"
+                disabled={busy}
+                onClick={() => void quickAddDaily(s)}
+                className="rounded-full border border-[#ca8a04]/50 bg-white/80 px-2.5 py-1 text-xs font-bold text-[#854d0e] disabled:opacity-50"
+              >
+                + {s}
+              </button>
+            ))}
+          </div>
+        ) : null}
         <form className="grid gap-2" onSubmit={onSubmit}>
           <input
             required
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="Título"
+            placeholder={isDiarias ? 'Ej. Barrer el salón' : 'Título'}
             className="rounded-xl border border-[var(--line)] bg-white/90 px-3 py-2.5 outline-none ring-[var(--accent)] focus:ring-2"
           />
           <textarea
@@ -176,19 +256,28 @@ export function HomePage() {
             className="resize-none rounded-xl border border-[var(--line)] bg-white/90 px-3 py-2.5 outline-none ring-[var(--accent)] focus:ring-2"
           />
           <div className="grid grid-cols-2 gap-2">
-            <label className="text-sm">
-              <span className="mb-1 block font-bold text-[var(--ink-soft)]">Tipo</span>
-              <select
-                value={kind}
-                onChange={(e) => setKind(e.target.value as ItemKind)}
-                className="w-full rounded-xl border border-[var(--line)] bg-white/90 px-3 py-2.5"
-              >
-                <option value="tarea">Tarea</option>
-                <option value="cita">Cita</option>
-                <option value="chore">Chore</option>
-                {isAdult() ? <option value="bebe">Bebé</option> : null}
-              </select>
-            </label>
+            {!isDiarias || editing ? (
+              <label className="text-sm">
+                <span className="mb-1 block font-bold text-[var(--ink-soft)]">Tipo</span>
+                <select
+                  value={kind}
+                  onChange={(e) => setKind(e.target.value as ItemKind)}
+                  className="w-full rounded-xl border border-[var(--line)] bg-white/90 px-3 py-2.5"
+                >
+                  <option value="tarea">Tarea</option>
+                  <option value="cita">Cita</option>
+                  <option value="chore">Tarea diaria</option>
+                  {isAdult() ? <option value="bebe">Bebé</option> : null}
+                </select>
+              </label>
+            ) : (
+              <label className="text-sm">
+                <span className="mb-1 block font-bold text-[var(--ink-soft)]">Tipo</span>
+                <div className="rounded-xl border border-[#ca8a04]/40 bg-white/90 px-3 py-2.5 text-sm font-extrabold text-[#854d0e]">
+                  Tarea diaria
+                </div>
+              </label>
+            )}
             <label className="text-sm">
               <span className="mb-1 block font-bold text-[var(--ink-soft)]">Para</span>
               <select
@@ -197,7 +286,7 @@ export function HomePage() {
                 className="w-full rounded-xl border border-[var(--line)] bg-white/90 px-3 py-2.5"
               >
                 <option value="todos">Todos</option>
-                {FAMILY_MEMBERS.filter((m) => m.key !== 'bebe' || isAdult()).map((m) => (
+                {FAMILY_MEMBERS.filter((m) => m.key !== 'bebe').map((m) => (
                   <option key={m.key} value={m.key}>
                     {m.name}
                   </option>
@@ -205,31 +294,35 @@ export function HomePage() {
               </select>
             </label>
           </div>
-          <div className="grid grid-cols-2 gap-2">
-            <label className="text-sm">
-              <span className="mb-1 block font-bold text-[var(--ink-soft)]">Fecha</span>
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="w-full rounded-xl border border-[var(--line)] bg-white/90 px-3 py-2.5"
-              />
-            </label>
-            <label className="text-sm">
-              <span className="mb-1 block font-bold text-[var(--ink-soft)]">Hora</span>
-              <input
-                type="time"
-                value={time}
-                onChange={(e) => setTime(e.target.value)}
-                className="w-full rounded-xl border border-[var(--line)] bg-white/90 px-3 py-2.5"
-              />
-            </label>
-          </div>
+          {!isDiarias || editing ? (
+            <div className="grid grid-cols-2 gap-2">
+              <label className="text-sm">
+                <span className="mb-1 block font-bold text-[var(--ink-soft)]">Fecha</span>
+                <input
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  className="w-full rounded-xl border border-[var(--line)] bg-white/90 px-3 py-2.5"
+                />
+              </label>
+              <label className="text-sm">
+                <span className="mb-1 block font-bold text-[var(--ink-soft)]">Hora</span>
+                <input
+                  type="time"
+                  value={time}
+                  onChange={(e) => setTime(e.target.value)}
+                  className="w-full rounded-xl border border-[var(--line)] bg-white/90 px-3 py-2.5"
+                />
+              </label>
+            </div>
+          ) : null}
           <div className="flex gap-2">
             <button
               type="submit"
               disabled={busy}
-              className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-[var(--accent)] px-3 py-2.5 text-sm font-extrabold text-white disabled:opacity-60"
+              className={`inline-flex flex-1 items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-sm font-extrabold text-white disabled:opacity-60 ${
+                isDiarias ? 'bg-[#ca8a04]' : 'bg-[var(--accent)]'
+              }`}
             >
               {editing ? <Pencil className="size-4" /> : <Plus className="size-4" />}
               {editing ? 'Guardar' : 'Añadir'}
@@ -244,20 +337,43 @@ export function HomePage() {
       </section>
 
       {/* List */}
-      <section className="rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-4 shadow-[var(--shadow)]">
-        <h2 className="mb-3 text-lg font-bold">
-          {tab === 'hoy' ? 'Agenda de hoy' : tab === 'proximos' ? 'Próximos días' : 'Chores'}
-        </h2>
+      <section
+        className={`rounded-2xl border p-4 shadow-[var(--shadow)] ${
+          isDiarias
+            ? 'border-[#ca8a04]/35 bg-[#fffbeb]'
+            : 'border-[var(--line)] bg-[var(--surface)]'
+        }`}
+      >
+        {isDiarias ? (
+          <div className="mb-3">
+            <h2 className="flex items-center gap-2 text-lg font-extrabold text-[#854d0e]">
+              <Home className="size-5" aria-hidden />
+              En casa hoy
+            </h2>
+            <p className="mt-0.5 text-xs font-semibold text-[#a16207]">
+              {pendingCount} pendientes · {doneCount} hechas
+            </p>
+          </div>
+        ) : (
+          <h2 className="mb-3 text-lg font-bold">
+            {tab === 'hoy' ? 'Agenda de hoy' : 'Próximos días'}
+          </h2>
+        )}
         {loading ? (
           <p className="text-sm text-[var(--ink-soft)]">Cargando…</p>
         ) : list.length === 0 ? (
-          <p className="text-sm text-[var(--ink-soft)]">Nada por aquí. ¡Añade algo!</p>
+          <p className="text-sm text-[var(--ink-soft)]">
+            {isDiarias
+              ? 'Nada en casa todavía. Usa una sugerencia o añade una tarea diaria.'
+              : 'Nada por aquí. ¡Añade algo!'}
+          </p>
         ) : (
-          <ul className="divide-y divide-[var(--line)]">
+          <ul className={isDiarias ? 'flex flex-col gap-2' : 'divide-y divide-[var(--line)]'}>
             {list.map((item) => (
               <ItemRow
                 key={item.id}
                 item={item}
+                emphasizeDaily={isDiarias}
                 onToggle={() => void setStatus(item.id, item.status === 'hecha' ? 'pendiente' : 'hecha')}
                 onEdit={() => startEdit(item)}
                 onDelete={() => {
@@ -343,11 +459,13 @@ function ItemRow({
   onToggle,
   onEdit,
   onDelete,
+  emphasizeDaily,
 }: {
   item: OrgItem
   onToggle: () => void
   onEdit: () => void
   onDelete: () => void
+  emphasizeDaily?: boolean
 }) {
   const member = item.assignee === 'todos' ? null : memberByKey(item.assignee)
   const color = member?.color || '#ea580c'
@@ -357,10 +475,13 @@ function ItemRow({
 
   return (
     <li
-      className="my-1 flex items-start gap-2 rounded-xl px-2 py-3"
-      style={{ borderLeft: `4px solid ${color}`, background: done ? 'transparent' : `${soft}99` }}
+      className={`flex items-start gap-2 rounded-xl px-2 py-3 ${emphasizeDaily ? 'border border-[#fde68a] shadow-sm' : 'my-1'}`}
+      style={{
+        borderLeft: `4px solid ${color}`,
+        background: done ? (emphasizeDaily ? '#fffbeb' : 'transparent') : `${soft}99`,
+      }}
     >
-      <button type="button" onClick={onToggle} className="mt-0.5 p-1" style={{ color }} aria-label="Toggle">
+      <button type="button" onClick={onToggle} className="mt-0.5 p-1" style={{ color }} aria-label="Marcar">
         {done ? <CheckCircle2 className="size-5" /> : <Circle className="size-5" />}
       </button>
       <div className="min-w-0 flex-1">

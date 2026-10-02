@@ -127,10 +127,21 @@ export function kindLabel(kind: ItemKind): string {
     case 'cita':
       return 'Cita'
     case 'chore':
-      return 'Chore'
+      return 'Diaria'
     case 'bebe':
       return 'Bebé'
     default:
       return 'Tarea'
   }
 }
+
+/** Sugerencias rápidas para tareas diarias del hogar. */
+export const DAILY_TASK_SUGGESTIONS = [
+  'Barrer',
+  'Aspirar',
+  'Hacer comida',
+  'Lavar platos',
+  'Recoger juguetes',
+  'Sacar basura',
+  'Tender ropa',
+] as const
