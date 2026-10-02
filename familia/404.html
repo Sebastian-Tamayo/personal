@@ -1,0 +1,5 @@
+<!doctype html><html lang="es"><head><meta charset="UTF-8"/><script>
+var base='/personal/familia'; var path=location.pathname;
+if(path.indexOf(base)===0) path=path.slice(base.length)||'/';
+location.replace(base+'/?p='+encodeURIComponent(path)+location.search.replace(/^\?/,'&')+location.hash);
+</script></head><body></body></html>
