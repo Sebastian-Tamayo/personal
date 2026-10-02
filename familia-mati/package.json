@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "reminders": "node scripts/send-agenda-reminders.mjs"
+    "reminders": "node scripts/send-agenda-reminders.mjs",
+    "migrate:teo": "node scripts/migrate-hellen-to-teo.mjs"
   },
   "dependencies": {
     "firebase": "^12.19.0",

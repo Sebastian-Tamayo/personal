@@ -1,5 +1,6 @@
 import { Home, LogOut, Wallet } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
+import { resolveMemberLabel } from '../lib/family'
 import { financiasHref } from '../lib/firebase'
 import { useAuthStore } from '../store/authStore'
 import { FinanzasPinModal, isFinanzasUnlocked } from './FinanzasPinModal'
@@ -8,9 +9,10 @@ import { PersonaPickerModal, PersonaSwitcher } from './PersonaPicker'
 /** Adults only based on ACTIVE persona (Sebas/Lore). Teo never — even on shared email. */
 function canSeeFinanzas(profile: { role: string; memberKey: string } | null): boolean {
   if (!profile) return false
-  if (profile.memberKey === 'teo' || profile.memberKey === 'hellen') return false
+  const key = profile.memberKey === 'hellen' ? 'teo' : profile.memberKey
+  if (key === 'teo') return false
   if (profile.role === 'hijo') return false
-  return profile.role === 'adulto' || profile.memberKey === 'sebas' || profile.memberKey === 'lore'
+  return profile.role === 'adulto' || key === 'sebas' || key === 'lore'
 }
 
 export function AppShell({ children, title }: { children: ReactNode; title?: string }) {
@@ -44,7 +46,10 @@ export function AppShell({ children, title }: { children: ReactNode; title?: str
             {title ? <p className="text-sm text-[var(--ink-soft)]">{title}</p> : null}
             {profile ? (
               <p className="mt-1 truncate text-xs text-[var(--ink-soft)]">
-                Hola, <span className="font-bold">{profile.displayName}</span>
+                Hola,{' '}
+                <span className="font-bold">
+                  {resolveMemberLabel(profile.memberKey, profile.displayName)}
+                </span>
                 {user?.email ? ` · ${user.email}` : ''}
               </p>
             ) : null}

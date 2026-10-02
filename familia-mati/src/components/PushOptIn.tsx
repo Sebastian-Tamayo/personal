@@ -5,6 +5,7 @@ import {
   REMINDER_LEAD_PRESETS,
   formatLeadLabel,
   normalizeReminderLeadMinutes,
+  resolveMemberLabel,
 } from '../lib/family'
 import {
   dismissPushPromptSession,
@@ -59,7 +60,7 @@ export function PushOptIn() {
 
   if (!user || !profile || !ready) return null
 
-  const who = profile.displayName || profile.memberKey
+  const who = resolveMemberLabel(profile.memberKey, profile.displayName)
   const leadMinutes = normalizeReminderLeadMinutes(
     profile.reminderLeadMinutes ?? DEFAULT_REMINDER_LEAD_MINUTES,
   )

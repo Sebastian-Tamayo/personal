@@ -152,17 +152,23 @@ function buildActiveProfile(
   personaSettings: Partial<Record<PersonaKey, PersonaSettings>>,
   updatedAt: number,
 ): UserProfile {
-  const member = memberByKey(active)!
+  const norm = normalizeMemberKey(active)
+  const persona: PersonaKey = norm && isPersonaKey(norm) ? norm : 'sebas'
+  const member = memberByKey(persona)!
   const lead =
-    personaSettings[active]?.reminderLeadMinutes ?? DEFAULT_REMINDER_LEAD_MINUTES
+    personaSettings[persona]?.reminderLeadMinutes ?? DEFAULT_REMINDER_LEAD_MINUTES
   return {
     uid,
     email,
-    memberKey: active,
+    memberKey: persona,
     role: (member.role === 'hijo' ? 'hijo' : 'adulto') as UserRole,
+    // Always from FAMILY_MEMBERS — never trust stale Firestore "Hellen"
     displayName: member.name,
     reminderLeadMinutes: normalizeReminderLeadMinutes(lead),
-    personas,
+    personas: personas.map((p) => {
+      const n = normalizeMemberKey(p)
+      return n && isPersonaKey(n) ? n : p
+    }),
     personaSettings,
     updatedAt,
   }

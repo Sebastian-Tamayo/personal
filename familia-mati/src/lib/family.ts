@@ -77,6 +77,21 @@ export function memberByKey(key: string | null | undefined): FamilyMember | unde
   return FAMILY_MEMBERS.find((m) => m.key === n)
 }
 
+/**
+ * UI label for a persona. Never shows legacy “Hellen” as the person name
+ * (app brand “Familia Hellen y Mati” is separate).
+ */
+export function resolveMemberLabel(
+  memberKey: string | null | undefined,
+  displayName?: string | null,
+): string {
+  const m = memberByKey(memberKey)
+  if (m) return m.name
+  const raw = String(displayName || '').trim()
+  if (!raw || /^hellen$/i.test(raw) || /^hija$/i.test(raw)) return 'Teo'
+  return raw
+}
+
 export const KIND_COLORS: Record<ItemKind, { color: string; soft: string }> = {
   cita: { color: '#0f766e', soft: '#ccfbf1' },
   tarea: { color: '#1d4ed8', soft: '#dbeafe' },
