@@ -1,10 +1,19 @@
 # Closed-app mobile Web Push for Familia Hellen y Mati Agenda.
-# Timezone: Europe/Madrid. Catch-up until event if primary window missed.
+#
+# Schedules use UTC (GitHub does not support TZ in cron).
+# Europe/Madrid = UTC+1 (CET) / UTC+2 (CEST). Reminder math uses REMINDER_TZ.
+# Catch-up window (45 min) covers GitHub's common schedule delay under load.
+#
+# Runs only from the default branch (main). Requires Actions enabled on the repo.
+# Idempotent via familia_reminders_sent — safe if primary + backup both fire.
 name: Familia agenda push reminders
 
 on:
   schedule:
-    - cron: '*/15 * * * *'
+    # Primary: every 15 minutes (UTC)
+    - cron: '0,15,30,45 * * * *'
+    # Offset backup on the same workflow (independent scheduler registration)
+    - cron: '7,22,37,52 * * * *'
   workflow_dispatch:
   repository_dispatch:
     types: [familia-agenda-remind]
@@ -12,15 +21,22 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: familia-agenda-reminders
+  cancel-in-progress: false
+
 jobs:
   remind:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Cron heartbeat
         run: |
           echo "event=${{ github.event_name }}"
           echo "utc=$(date -u -Iseconds)"
           echo "madrid=$(TZ=Europe/Madrid date -Iseconds)"
+          echo "ref=${{ github.ref }}"
+          echo "sha=${{ github.sha }}"
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:

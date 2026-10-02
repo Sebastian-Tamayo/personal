@@ -1,0 +1,39 @@
+# Independent schedule registration that re-triggers the reminders workflow.
+# GitHub sometimes skips a scheduled workflow for hours; a second workflow with
+# a different cron + workflow_dispatch ping raises the odds a tick lands.
+#
+# Safe to overlap: send-agenda-reminders.mjs is idempotent (familia_reminders_sent).
+name: Familia agenda cron backup ping
+
+on:
+  schedule:
+    # Stagger vs primary 0/15/30/45 — also covers the 7/22/37/52 gap if primary slept
+    - cron: '3,18,33,48 * * * *'
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: familia-agenda-cron-backup
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Heartbeat
+        run: |
+          echo "event=${{ github.event_name }}"
+          echo "utc=$(date -u -Iseconds)"
+          echo "madrid=$(TZ=Europe/Madrid date -Iseconds)"
+      - name: Dispatch agenda reminders
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh workflow run familia-agenda-push.yml \
+            --repo "${{ github.repository }}" \
+            --ref "${{ github.event.repository.default_branch }}"
+          echo "dispatched familia-agenda-push.yml on ${{ github.event.repository.default_branch }}"
