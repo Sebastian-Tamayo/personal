@@ -7,7 +7,15 @@ import {
 } from 'firebase/auth'
 import { doc, getDoc, setDoc } from 'firebase/firestore'
 import { create } from 'zustand'
-import { memberByKey, normalizeMemberKey, type MemberKey, type UserProfile, type UserRole } from '../lib/family'
+import {
+  DEFAULT_REMINDER_LEAD_MINUTES,
+  memberByKey,
+  normalizeMemberKey,
+  normalizeReminderLeadMinutes,
+  type MemberKey,
+  type UserProfile,
+  type UserRole,
+} from '../lib/family'
 import { getDb, getFirebaseAuth, isFirebaseConfigured } from '../lib/firebase'
 
 interface AuthState {
@@ -22,6 +30,7 @@ interface AuthState {
   logout: () => Promise<void>
   clearError: () => void
   isAdult: () => boolean
+  updateReminderLeadMinutes: (minutes: number) => Promise<void>
 }
 
 function mapAuthError(err: unknown): string {
@@ -56,16 +65,20 @@ async function loadOrCreateProfile(user: User, memberKey?: MemberKey): Promise<U
       displayFromDoc === 'Hija' || !displayFromDoc
         ? member?.name || 'Sebas'
         : displayFromDoc
+    const reminderLeadMinutes = normalizeReminderLeadMinutes(
+      d.reminderLeadMinutes ?? DEFAULT_REMINDER_LEAD_MINUTES,
+    )
     const profile: UserProfile = {
       uid: user.uid,
       email: String(d.email || user.email || ''),
       memberKey: memberKeyResolved,
       role: (d.role as UserRole) || (member?.role === 'hijo' ? 'hijo' : 'adulto'),
       displayName,
+      reminderLeadMinutes,
       updatedAt: Number(d.updatedAt) || Date.now(),
     }
-    // Persist rename if needed
-    if (rawKey === 'hija' || displayFromDoc === 'Hija') {
+    // Persist rename / default lead if needed
+    if (rawKey === 'hija' || displayFromDoc === 'Hija' || d.reminderLeadMinutes == null) {
       await setDoc(ref, { ...profile, updatedAt: Date.now() }, { merge: true })
     }
     return profile
@@ -78,6 +91,7 @@ async function loadOrCreateProfile(user: User, memberKey?: MemberKey): Promise<U
     memberKey: key,
     role: member.role === 'hijo' ? 'hijo' : 'adulto',
     displayName: member.name,
+    reminderLeadMinutes: DEFAULT_REMINDER_LEAD_MINUTES,
     updatedAt: Date.now(),
   }
   await setDoc(ref, profile)
@@ -152,5 +166,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (!p) return false
     if (p.memberKey === 'hellen' || p.role === 'hijo') return false
     return p.role === 'adulto' || p.memberKey === 'sebas' || p.memberKey === 'lore'
+  },
+
+  updateReminderLeadMinutes: async (minutes) => {
+    const user = get().user
+    const profile = get().profile
+    if (!user || !profile) throw new Error('No hay sesión')
+    const reminderLeadMinutes = normalizeReminderLeadMinutes(minutes)
+    const next: UserProfile = {
+      ...profile,
+      reminderLeadMinutes,
+      updatedAt: Date.now(),
+    }
+    await setDoc(doc(getDb(), 'familia_users', user.uid), { reminderLeadMinutes, updatedAt: next.updatedAt }, { merge: true })
+    set({ profile: next })
   },
 }))

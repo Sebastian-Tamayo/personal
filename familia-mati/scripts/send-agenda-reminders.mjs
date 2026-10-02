@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * Send Web Push ~2h before agenda items (cita/tarea with date+time).
+ * Send Web Push before agenda items (cita/tarea with date+time).
+ * Lead time is per-user (familia_users.reminderLeadMinutes); default 120 min.
  * Runs outside the browser (GitHub Actions cron or any host). Does NOT use setTimeout in the app.
  *
  * Required env (never commit):
@@ -18,6 +19,24 @@ import { createRequire } from 'node:module'
 import { join } from 'node:path'
 
 const require = createRequire(import.meta.url)
+
+const LEAD_PRESETS = new Set([30, 60, 120, 180, 1440])
+const DEFAULT_LEAD_MINUTES = 120
+
+function normalizeLeadMinutes(raw) {
+  const n = Number(raw)
+  if (!Number.isFinite(n) || !LEAD_PRESETS.has(n)) return DEFAULT_LEAD_MINUTES
+  return n
+}
+
+function formatLeadBody(minutes) {
+  if (minutes === 30) return 'En ~30 min'
+  if (minutes === 60) return 'En ~1 h'
+  if (minutes === 120) return 'En ~2 h'
+  if (minutes === 180) return 'En ~3 h'
+  if (minutes === 1440) return 'En ~1 día'
+  return `En ~${minutes} min`
+}
 
 function loadVapid() {
   let publicKey = process.env.VAPID_PUBLIC_KEY || ''
@@ -52,7 +71,6 @@ function loadServiceAccount() {
 function eventUtcMs(dateStr, timeStr, timeZone) {
   const [y, m, d] = dateStr.split('-').map(Number)
   const [hh, mm] = timeStr.split(':').map(Number)
-  // Binary search UTC instant whose tz wall clock matches
   let lo = Date.UTC(y, m - 1, d - 1, 0, 0, 0)
   let hi = Date.UTC(y, m - 1, d + 1, 23, 59, 59)
   const target = { y, m, d, hh, mm }
@@ -66,7 +84,9 @@ function eventUtcMs(dateStr, timeStr, timeZone) {
     hourCycle: 'h23',
   })
   function parts(ms) {
-    const p = Object.fromEntries(fmt.formatToParts(new Date(ms)).filter((x) => x.type !== 'literal').map((x) => [x.type, x.value]))
+    const p = Object.fromEntries(
+      fmt.formatToParts(new Date(ms)).filter((x) => x.type !== 'literal').map((x) => [x.type, x.value]),
+    )
     return {
       y: Number(p.year),
       m: Number(p.month),
@@ -89,7 +109,6 @@ function eventUtcMs(dateStr, timeStr, timeZone) {
     if (c < 0) lo = mid + 1
     else hi = mid - 1
   }
-  // Fallback: treat as UTC (better than crashing)
   return Date.UTC(y, m - 1, d, hh, mm, 0)
 }
 
@@ -121,6 +140,11 @@ function recipientsForItem(item, subs) {
   return subs.filter((s) => String(s.memberKey || '') === who)
 }
 
+function inLeadWindow(now, eventAt, leadMinutes, windowMs) {
+  const remindAt = eventAt - leadMinutes * 60 * 1000
+  return now >= remindAt && now < remindAt + windowMs
+}
+
 async function main() {
   const admin = require('firebase-admin')
   const webpush = require('web-push')
@@ -137,16 +161,23 @@ async function main() {
   const tz = process.env.REMINDER_TZ || 'Europe/Madrid'
   const windowMin = Number(process.env.REMINDER_WINDOW_MINUTES || 20)
   const now = Date.now()
-  const leadMs = 2 * 60 * 60 * 1000
   const windowMs = windowMin * 60 * 1000
 
-  // Profile map uid → memberKey (fallback if sub doc lacks memberKey)
+  // Profile map uid → { memberKey, leadMinutes }
   const usersSnap = await db.collection('familia_users').get()
   const memberByUid = new Map()
+  const leadByUid = new Map()
+  const leadByMember = new Map()
   for (const doc of usersSnap.docs) {
     const d = doc.data() || {}
     const key = normalizeAssignee(d.memberKey)
-    if (key && key !== 'todos') memberByUid.set(doc.id, key)
+    const lead = normalizeLeadMinutes(d.reminderLeadMinutes)
+    leadByUid.set(doc.id, lead)
+    if (key && key !== 'todos') {
+      memberByUid.set(doc.id, key)
+      // Prefer latest profile if multiple uids share a memberKey (shouldn't happen)
+      if (!leadByMember.has(key)) leadByMember.set(key, lead)
+    }
   }
 
   const itemsSnap = await db.collection('familia_items').get()
@@ -159,14 +190,15 @@ async function main() {
     const time = String(d.time || '')
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}/.test(time)) continue
     const eventAt = eventUtcMs(date, time.slice(0, 5), tz)
-    const remindAt = eventAt - leadMs
-    if (now >= remindAt && now < remindAt + windowMs) {
-      agenda.push({ id: doc.id, ...d, eventAt, remindAt })
+    // Keep items whose event is still upcoming (or just started) within max lead + window
+    const maxLeadMs = 1440 * 60 * 1000
+    if (now < eventAt + windowMs && now >= eventAt - maxLeadMs - windowMs) {
+      agenda.push({ id: doc.id, ...d, eventAt })
     }
   }
 
   if (!agenda.length) {
-    console.log(JSON.stringify({ ok: true, sent: 0, checked: itemsSnap.size, reason: 'no_items_in_window' }))
+    console.log(JSON.stringify({ ok: true, sent: 0, checked: itemsSnap.size, reason: 'no_upcoming_agenda' }))
     return
   }
 
@@ -175,10 +207,22 @@ async function main() {
     .map((doc) => {
       const data = doc.data() || {}
       let memberKey = normalizeAssignee(data.memberKey)
+      const uid = data.uid || (!data.legacyUidDoc && doc.id.length === 28 ? doc.id : null)
       if (!memberKey || memberKey === 'todos') {
-        memberKey = memberByUid.get(doc.id) || memberByUid.get(data.uid) || null
+        memberKey = memberByUid.get(doc.id) || (uid ? memberByUid.get(uid) : null) || null
       }
-      return { id: doc.id, ...data, memberKey }
+      const leadMinutes =
+        (uid && leadByUid.get(uid)) ||
+        leadByUid.get(doc.id) ||
+        (memberKey ? leadByMember.get(memberKey) : null) ||
+        DEFAULT_LEAD_MINUTES
+      return {
+        id: doc.id,
+        ...data,
+        uid: uid || data.uid || null,
+        memberKey,
+        leadMinutes: normalizeLeadMinutes(leadMinutes),
+      }
     })
     .filter(
       (s) =>
@@ -196,32 +240,20 @@ async function main() {
   const targetingLog = []
 
   for (const item of agenda) {
-    const sentRef = db.collection('familia_reminders_sent').doc(`${item.id}_2h`)
-    const already = await sentRef.get()
-    if (already.exists) {
-      skipped++
-      continue
-    }
-
     const who = normalizeAssignee(item.assignee ?? item.para)
     const targets = recipientsForItem(item, subs)
+
+    // Group targets by lead window — only notify those currently in their personal window
+    const dueTargets = targets.filter((t) => inLeadWindow(now, item.eventAt, t.leadMinutes, windowMs))
+
     targetingLog.push({
       itemId: item.id,
       title: item.title,
       assignee: who,
-      recipients: targets.map((t) => t.memberKey),
+      due: dueTargets.map((t) => ({ memberKey: t.memberKey, leadMinutes: t.leadMinutes })),
     })
 
-    if (!who || !targets.length) {
-      // Nobody eligible / no matching subscription — do not fan-out to others
-      await sentRef.set({
-        itemId: item.id,
-        kind: '2h',
-        at: now,
-        recipients: 0,
-        assignee: who,
-        reason: !who ? 'invalid_assignee' : 'no_matching_subs',
-      })
+    if (!who || !dueTargets.length) {
       skipped++
       continue
     }
@@ -232,47 +264,77 @@ async function main() {
       hour: '2-digit',
       minute: '2-digit',
     })
-    const title = 'Familia Mati · aviso'
-    const body = `En ~2 h: ${item.title} (${when})`
-    const payload = JSON.stringify({
-      title,
-      body,
-      url: '/personal/familia/',
-      tag: `agenda-${item.id}`,
-    })
 
-    let okCount = 0
-    const deliveredTo = []
-    for (const s of targets) {
-      try {
-        await webpush.sendNotification(
-          {
-            endpoint: s.endpoint,
-            keys: { p256dh: s.keys.p256dh, auth: s.keys.auth },
-          },
-          payload,
-        )
-        okCount++
-        sent++
-        deliveredTo.push(s.memberKey)
-      } catch (e) {
-        const status = e?.statusCode
-        errors.push({ uid: s.uid || s.id, memberKey: s.memberKey, status, message: String(e?.message || e) })
-        if (status === 404 || status === 410) {
-          await db.collection('familia_push_subs').doc(s.id).set({ enabled: false, dead: true }, { merge: true })
-        }
-      }
+    // Dedupe by (item, uid|device, lead) so each person gets one send per lead setting
+    const byPerson = new Map()
+    for (const t of dueTargets) {
+      const personKey = t.uid || `${t.memberKey}:${t.id}`
+      const dedupeKey = `${personKey}_${t.leadMinutes}`
+      if (!byPerson.has(dedupeKey)) byPerson.set(dedupeKey, [])
+      byPerson.get(dedupeKey).push(t)
     }
 
-    await sentRef.set({
-      itemId: item.id,
-      kind: '2h',
-      at: now,
-      recipients: okCount,
-      assignee: who,
-      deliveredTo,
-      title: item.title,
-    })
+    for (const [, devices] of byPerson) {
+      const sample = devices[0]
+      const lead = sample.leadMinutes
+      const uidKey = sample.uid || sample.memberKey || sample.id
+      const sentRef = db.collection('familia_reminders_sent').doc(`${item.id}_${uidKey}_${lead}m`)
+      const already = await sentRef.get()
+      if (already.exists) {
+        skipped++
+        continue
+      }
+
+      const title = 'Familia Mati · aviso'
+      const body = `${formatLeadBody(lead)}: ${item.title} (${when})`
+      const payload = JSON.stringify({
+        title,
+        body,
+        url: '/personal/familia/',
+        tag: `agenda-${item.id}-${lead}`,
+      })
+
+      let okCount = 0
+      const deliveredTo = []
+      for (const s of devices) {
+        try {
+          await webpush.sendNotification(
+            {
+              endpoint: s.endpoint,
+              keys: { p256dh: s.keys.p256dh, auth: s.keys.auth },
+            },
+            payload,
+          )
+          okCount++
+          sent++
+          deliveredTo.push(s.memberKey)
+        } catch (e) {
+          const status = e?.statusCode
+          errors.push({
+            uid: s.uid || s.id,
+            memberKey: s.memberKey,
+            status,
+            message: String(e?.message || e),
+          })
+          if (status === 404 || status === 410) {
+            await db.collection('familia_push_subs').doc(s.id).set({ enabled: false, dead: true }, { merge: true })
+          }
+        }
+      }
+
+      await sentRef.set({
+        itemId: item.id,
+        kind: `lead_${lead}m`,
+        leadMinutes: lead,
+        at: now,
+        recipients: okCount,
+        assignee: who,
+        memberKey: sample.memberKey,
+        uid: sample.uid || null,
+        deliveredTo,
+        title: item.title,
+      })
+    }
   }
 
   console.log(

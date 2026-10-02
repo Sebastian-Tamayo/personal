@@ -94,12 +94,37 @@ export interface OrgItem {
   createdBy: string
 }
 
+/** Presets for “Avisar con antelación” (minutes before event). Default 2 h. */
+export const REMINDER_LEAD_PRESETS = [
+  { minutes: 30, label: '30 min' },
+  { minutes: 60, label: '1 h' },
+  { minutes: 120, label: '2 h' },
+  { minutes: 180, label: '3 h' },
+  { minutes: 1440, label: '1 día' },
+] as const
+
+export const DEFAULT_REMINDER_LEAD_MINUTES = 120
+
+export function normalizeReminderLeadMinutes(raw: unknown): number {
+  const n = Number(raw)
+  if (!Number.isFinite(n)) return DEFAULT_REMINDER_LEAD_MINUTES
+  const allowed = REMINDER_LEAD_PRESETS.map((p) => p.minutes)
+  return allowed.includes(n as (typeof allowed)[number]) ? n : DEFAULT_REMINDER_LEAD_MINUTES
+}
+
+export function formatLeadLabel(minutes: number): string {
+  const preset = REMINDER_LEAD_PRESETS.find((p) => p.minutes === minutes)
+  return preset?.label || `${minutes} min`
+}
+
 export interface UserProfile {
   uid: string
   email: string
   memberKey: MemberKey
   role: UserRole
   displayName: string
+  /** Minutes before event to send push; per-user, default 120. */
+  reminderLeadMinutes: number
   updatedAt: number
 }
 
