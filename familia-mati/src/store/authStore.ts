@@ -1,0 +1,136 @@
+import {
+  createUserWithEmailAndPassword,
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  signOut,
+  type User,
+} from 'firebase/auth'
+import { doc, getDoc, setDoc } from 'firebase/firestore'
+import { create } from 'zustand'
+import { memberByKey, type MemberKey, type UserProfile, type UserRole } from '../lib/family'
+import { getDb, getFirebaseAuth, isFirebaseConfigured } from '../lib/firebase'
+
+interface AuthState {
+  user: User | null
+  profile: UserProfile | null
+  loading: boolean
+  error: string | null
+  configured: boolean
+  init: () => () => void
+  login: (email: string, password: string) => Promise<void>
+  register: (email: string, password: string, memberKey: MemberKey) => Promise<void>
+  logout: () => Promise<void>
+  clearError: () => void
+  isAdult: () => boolean
+}
+
+function mapAuthError(err: unknown): string {
+  const code =
+    typeof err === 'object' && err && 'code' in err ? String((err as { code: string }).code) : ''
+  switch (code) {
+    case 'auth/invalid-credential':
+    case 'auth/wrong-password':
+    case 'auth/user-not-found':
+      return 'Correo o contraseña incorrectos.'
+    case 'auth/email-already-in-use':
+      return 'Ese correo ya está registrado.'
+    case 'auth/weak-password':
+      return 'La contraseña debe tener al menos 6 caracteres.'
+    default:
+      return 'No se pudo completar la autenticación.'
+  }
+}
+
+async function loadOrCreateProfile(user: User, memberKey?: MemberKey): Promise<UserProfile> {
+  const ref = doc(getDb(), 'familia_users', user.uid)
+  const snap = await getDoc(ref)
+  if (snap.exists()) {
+    const d = snap.data()
+    return {
+      uid: user.uid,
+      email: String(d.email || user.email || ''),
+      memberKey: (d.memberKey as MemberKey) || 'sebas',
+      role: (d.role as UserRole) || 'adulto',
+      displayName: String(d.displayName || ''),
+      updatedAt: Number(d.updatedAt) || Date.now(),
+    }
+  }
+  const key = memberKey && memberKey !== 'bebe' ? memberKey : 'sebas'
+  const member = memberByKey(key)!
+  const profile: UserProfile = {
+    uid: user.uid,
+    email: user.email || '',
+    memberKey: key,
+    role: member.role === 'hijo' ? 'hijo' : 'adulto',
+    displayName: member.name,
+    updatedAt: Date.now(),
+  }
+  await setDoc(ref, profile)
+  return profile
+}
+
+export const useAuthStore = create<AuthState>((set, get) => ({
+  user: null,
+  profile: null,
+  loading: true,
+  error: null,
+  configured: isFirebaseConfigured(),
+
+  init: () => {
+    if (!isFirebaseConfigured()) {
+      set({ loading: false, configured: false })
+      return () => undefined
+    }
+    return onAuthStateChanged(getFirebaseAuth(), (user) => {
+      void (async () => {
+        if (!user) {
+          set({ user: null, profile: null, loading: false })
+          return
+        }
+        try {
+          const profile = await loadOrCreateProfile(user)
+          set({ user, profile, loading: false })
+        } catch (err) {
+          set({
+            user,
+            profile: null,
+            loading: false,
+            error: err instanceof Error ? err.message : 'Error de perfil',
+          })
+        }
+      })()
+    })
+  },
+
+  login: async (email, password) => {
+    set({ error: null, loading: true })
+    try {
+      await signInWithEmailAndPassword(getFirebaseAuth(), email.trim(), password)
+    } catch (err) {
+      set({ error: mapAuthError(err), loading: false })
+      throw err
+    }
+  },
+
+  register: async (email, password, memberKey) => {
+    if (memberKey === 'bebe') throw new Error('El bebé no tiene cuenta')
+    set({ error: null, loading: true })
+    try {
+      const cred = await createUserWithEmailAndPassword(getFirebaseAuth(), email.trim(), password)
+      const profile = await loadOrCreateProfile(cred.user, memberKey)
+      set({ user: cred.user, profile, loading: false })
+    } catch (err) {
+      set({ error: mapAuthError(err), loading: false })
+      throw err
+    }
+  },
+
+  logout: async () => {
+    await signOut(getFirebaseAuth())
+    set({ user: null, profile: null })
+  },
+
+  clearError: () => set({ error: null }),
+
+  isAdult: () => get().profile?.role === 'adulto',
+}))

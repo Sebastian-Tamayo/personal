@@ -1,6 +1,10 @@
-import { LogOut, Wallet } from 'lucide-react'
+import { Home, LogOut, Wallet } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { useAuthStore } from '../store/authStore'
+
+const FAMILIA_URL =
+  (import.meta.env.VITE_FAMILIA_URL as string) ||
+  'https://sebastian-tamayo.github.io/personal/familia/'
 
 export function AppShell({ children, title }: { children: ReactNode; title?: string }) {
   const user = useAuthStore((s) => s.user)
@@ -17,6 +21,15 @@ export function AppShell({ children, title }: { children: ReactNode; title?: str
           {title ? <p className="text-sm text-[var(--ink-soft)]">{title}</p> : null}
           {user?.email ? (
             <p className="mt-1 truncate text-xs text-[var(--ink-soft)]">{user.email}</p>
+          ) : null}
+          {user ? (
+            <a
+              href={FAMILIA_URL}
+              className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-[var(--accent-deep)] underline-offset-2 hover:underline"
+            >
+              <Home className="size-3.5" />
+              Familia Mati
+            </a>
           ) : null}
         </div>
         {user ? (
