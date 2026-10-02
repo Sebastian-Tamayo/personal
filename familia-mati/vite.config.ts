@@ -43,6 +43,8 @@ export default defineConfig({
       workbox: {
         navigateFallback: '/personal/familia/index.html',
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        // Closed-app Web Push (push + notificationclick)
+        importScripts: ['push-handler.js'],
       },
     }),
   ],

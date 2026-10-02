@@ -1,6 +1,7 @@
 import { Baby, CalendarDays, CheckCircle2, Circle, Home, Pencil, Plus, Trash2, X } from 'lucide-react'
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { AppShell } from '../components/AppShell'
+import { PushOptIn } from '../components/PushOptIn'
 import {
   DAILY_TASK_SUGGESTIONS,
   FAMILY_MEMBERS,
@@ -231,6 +232,8 @@ export function HomePage() {
           {syncError}
         </p>
       ) : null}
+
+      <PushOptIn />
 
       {/* ========== 1. TAREAS DIARIAS (primary, first) ========== */}
       <section className="overflow-hidden rounded-3xl border-2 border-[#ca8a04]/45 bg-gradient-to-br from-[#fef9c3] via-[#fef08a]/70 to-[#fde68a]/40 shadow-[var(--shadow)]">
