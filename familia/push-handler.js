@@ -30,6 +30,9 @@ self.addEventListener('push', (event) => {
       lang: 'es',
       tag: data.tag || 'familia-agenda',
       renotify: true,
+      // iOS / APNs via Web Push: keep notification visible until user acts
+      requireInteraction: true,
+      silent: false,
     }),
   )
 })
