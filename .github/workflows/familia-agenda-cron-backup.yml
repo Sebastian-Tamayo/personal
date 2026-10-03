@@ -7,8 +7,8 @@ name: Familia agenda cron backup ping
 
 on:
   schedule:
-    # Stagger vs primary 0/15/30/45 — also covers the 7/22/37/52 gap if primary slept
-    - cron: '3,18,33,48 * * * *'
+    # Dense backup: GH schedule gaps of hours have missed lead windows (e.g. 09:30 Madrid).
+    - cron: '*/5 * * * *'
   workflow_dispatch:
 
 permissions:

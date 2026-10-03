@@ -58,5 +58,5 @@ jobs:
           VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
           VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT }}
           REMINDER_TZ: Europe/Madrid
-          REMINDER_WINDOW_MINUTES: '45'
+          REMINDER_WINDOW_MINUTES: '60'
         run: node scripts/send-agenda-reminders.mjs

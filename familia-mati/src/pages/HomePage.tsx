@@ -43,14 +43,6 @@ function asPersona(key: string | null | undefined): PersonaKey | null {
   return n === 'sebas' || n === 'lore' || n === 'hellen' ? n : null
 }
 
-function assigneeKey(assignee: string): ParaAssignee {
-  if (assignee === 'bebe') return 'todos'
-  if (assignee === 'sebas' || assignee === 'lore' || assignee === 'hellen' || assignee === 'todos') {
-    return assignee
-  }
-  return 'todos'
-}
-
 export function HomePage() {
   const user = useAuthStore((s) => s.user)!
   const profile = useAuthStore((s) => s.profile)
@@ -89,28 +81,22 @@ export function HomePage() {
   useEffect(() => subscribe(), [subscribe])
 
   useEffect(() => {
-    if (!showDailyForm && !dailyEditing) setDailyAssignee(myKey)
-    if (!showAgendaForm && !agendaEditing) setAgendaAssignee(myKey)
-  }, [myKey, showDailyForm, showAgendaForm, dailyEditing, agendaEditing])
+    const defaultPara: ParaAssignee = viewFilter === 'todos' ? myKey : viewFilter
+    if (!showDailyForm && !dailyEditing) setDailyAssignee(defaultPara)
+    if (!showAgendaForm && !agendaEditing) setAgendaAssignee(defaultPara)
+  }, [myKey, viewFilter, showDailyForm, showAgendaForm, dailyEditing, agendaEditing])
 
   const today = todayISO()
 
-  /** Everyone sees all household items; no bebé section (bebe → todos). */
-  const filtered = useMemo(() => {
-    return items.filter((i) => {
-      if (i.kind === 'bebe') return false
-      const a = assigneeKey(i.assignee)
-      if (viewFilter === 'todos') return true
-      return a === viewFilter || a === 'todos'
-    })
-  }, [items, viewFilter])
+  /** Everyone always sees all household items; chips only set default «Para». */
+  const visibleItems = useMemo(() => items.filter((i) => i.kind !== 'bebe'), [items])
 
-  const diariasHoy = filtered.filter(
+  const diariasHoy = visibleItems.filter(
     (i) =>
       i.kind === 'chore' &&
       (i.date === today || !i.date || (i.date < today && i.status === 'pendiente')),
   )
-  const agendaItems = filtered.filter((i) => i.kind === 'cita' || i.kind === 'tarea')
+  const agendaItems = visibleItems.filter((i) => i.kind === 'cita' || i.kind === 'tarea')
   const agendaHoy = agendaItems.filter(
     (i) => i.date === today || (!i.date && i.status === 'pendiente'),
   )
@@ -290,7 +276,11 @@ export function HomePage() {
 
   return (
     <AppShell>
-      <section className="animate-rise flex gap-2 overflow-x-auto pb-1" data-testid="filter-chips">
+      <section
+        className="animate-rise flex gap-2 overflow-x-auto pb-1"
+        data-testid="filter-chips"
+        aria-label="Para por defecto al crear (todos ven todas las listas)"
+      >
         <FilterChip
           active={viewFilter === 'todos'}
           label="👥 Todos"
