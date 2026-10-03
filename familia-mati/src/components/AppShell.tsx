@@ -70,14 +70,11 @@ export function AppShell({ children, title }: { children: ReactNode; title?: str
           <button
             type="button"
             onClick={onFinanzasClick}
-            className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-[#0f766e]/40 bg-gradient-to-r from-[#ecfdf5] to-[#ccfbf1] px-4 py-3.5 text-sm font-extrabold text-[#0f766e] shadow-sm transition hover:border-[#0f766e] hover:shadow"
+            className="mt-2 inline-flex min-h-9 items-center gap-1.5 rounded-lg px-1.5 py-1 text-xs font-bold text-[#0f766e] underline-offset-2 hover:bg-[#ecfdf5]/80 hover:underline"
             data-testid="link-finanzas"
           >
-            <Wallet className="size-5 shrink-0" aria-hidden />
-            <span className="flex flex-col items-start leading-tight sm:flex-row sm:items-center sm:gap-2">
-              <span>Ir a Finanzas Mati</span>
-              <span className="text-xs font-bold opacity-70">gastos · ahorro · PIN</span>
-            </span>
+            <Wallet className="size-3.5 shrink-0" aria-hidden />
+            Finanzas Mati
           </button>
         ) : null}
       </header>
