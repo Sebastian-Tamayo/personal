@@ -289,7 +289,7 @@ export function HomePage() {
   const agendaFormOpen = showAgendaForm || !!agendaEditing
 
   return (
-    <AppShell title="En casa hoy · citas y compromisos">
+    <AppShell>
       <section className="animate-rise flex gap-2 overflow-x-auto pb-1" data-testid="filter-chips">
         <FilterChip
           active={viewFilter === 'todos'}

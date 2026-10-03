@@ -43,15 +43,23 @@ export function AppShell({ children, title }: { children: ReactNode; title?: str
               <Home className="size-7 shrink-0 text-[var(--accent)]" aria-hidden />
               Familia Hellen y Mati
             </div>
-            {title ? <p className="text-sm text-[var(--ink-soft)]">{title}</p> : null}
             {profile ? (
-              <p className="mt-1 truncate text-xs text-[var(--ink-soft)]">
-                Hola,{' '}
-                <span className="font-bold">
-                  {resolveMemberLabel(profile.memberKey, profile.displayName)}
+              <p
+                className="mt-1 flex items-center gap-1.5 text-sm font-semibold text-[var(--ink-soft)]"
+                data-testid="teo-kitten-greeting"
+              >
+                <span className="text-base leading-none" aria-hidden>
+                  🐱
                 </span>
-                {user?.email ? ` · ${user.email}` : ''}
+                <span className="min-w-0 truncate">
+                  No te olvides de Teo,{' '}
+                  <span className="font-extrabold text-[var(--accent-deep)]">
+                    {resolveMemberLabel(profile.memberKey, profile.displayName)}
+                  </span>
+                </span>
               </p>
+            ) : title ? (
+              <p className="text-sm text-[var(--ink-soft)]">{title}</p>
             ) : null}
             {user ? <PersonaSwitcher /> : null}
           </div>
