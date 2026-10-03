@@ -264,4 +264,7 @@ export const DAILY_TASK_SUGGESTIONS = [
   'Recoger juguetes',
   'Sacar basura',
   'Tender ropa',
+  'Hacer deberes',
+  'Entregar bebé',
+  'Recoger bebé',
 ] as const
