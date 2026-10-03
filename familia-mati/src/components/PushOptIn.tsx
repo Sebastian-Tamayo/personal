@@ -4,7 +4,6 @@ import {
   DEFAULT_REMINDER_LEAD_MINUTES,
   REMINDER_LEAD_PRESETS,
   normalizeReminderLeadMinutes,
-  resolveMemberLabel,
 } from '../lib/family'
 import {
   dismissPushPromptSession,
@@ -61,7 +60,6 @@ export function PushOptIn() {
 
   if (!user || !profile || !ready) return null
 
-  const who = resolveMemberLabel(profile.memberKey, profile.displayName)
   const leadMinutes = normalizeReminderLeadMinutes(
     profile.reminderLeadMinutes ?? DEFAULT_REMINDER_LEAD_MINUTES,
   )
@@ -166,7 +164,7 @@ export function PushOptIn() {
         Activar avisos
       </h2>
       <p className="mb-2 text-sm font-semibold text-[#0c4a6e]">
-        Perfil <span className="font-extrabold">{who}</span>: avisos al móvil para la{' '}
+        Avisos al móvil para la{' '}
         <span className="font-extrabold">Agenda · citas y compromisos</span> (no para tareas
         diarias de casa). Lore y Hellen aprueban por separado.
       </p>
@@ -218,7 +216,7 @@ export function PushOptIn() {
           data-testid="push-enable-btn"
         >
           <Bell className="size-4" />
-          {busy ? 'Activando…' : `Activar avisos · ${who}`}
+          {busy ? 'Activando…' : 'Activar avisos'}
         </button>
       )}
 
