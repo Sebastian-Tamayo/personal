@@ -3,7 +3,6 @@ import { useCallback, useEffect, useState } from 'react'
 import {
   DEFAULT_REMINDER_LEAD_MINUTES,
   REMINDER_LEAD_PRESETS,
-  formatLeadLabel,
   normalizeReminderLeadMinutes,
   resolveMemberLabel,
 } from '../lib/family'
@@ -104,15 +103,10 @@ export function PushOptIn() {
         data-testid="avisos-lead-settings"
         data-avisos-user={profile.memberKey}
       >
-        <h2 className="mb-1 flex items-center gap-2 text-lg font-extrabold text-[#0369a1]">
+        <h2 className="mb-3 flex items-center gap-2 text-lg font-extrabold text-[#0369a1]">
           <Clock3 className="size-5" aria-hidden />
           Elegimos el tiempo del aviso
         </h2>
-        <p className="mb-3 text-sm font-semibold text-[#0c4a6e]/90">
-          Avisos activos para <span className="font-extrabold">{who}</span> · solo{' '}
-          <span className="font-extrabold">Agenda (citas)</span>. Elige la antelación: 30 min, 1 h,
-          2 h, 3 h o 1 día.
-        </p>
         <div className="flex flex-wrap gap-2" role="group" aria-label="Antelación del aviso">
           {REMINDER_LEAD_PRESETS.map((p) => {
             const selected = p.minutes === leadMinutes
@@ -135,9 +129,6 @@ export function PushOptIn() {
             )
           })}
         </div>
-        <p className="mt-2 text-xs font-semibold text-[#0c4a6e]/75">
-        Ahora: {formatLeadLabel(leadMinutes)} antes de citas/compromisos de la agenda.
-      </p>
         {leadError ? (
           <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900" role="alert">
             {leadError}
