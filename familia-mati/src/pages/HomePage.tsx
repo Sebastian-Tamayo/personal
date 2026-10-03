@@ -620,6 +620,7 @@ export function HomePage() {
                 <ItemRow
                   key={item.id}
                   item={item}
+                  emphasizeAssignee
                   onToggle={() =>
                     void setStatus(item.id, item.status === 'hecha' ? 'pendiente' : 'hecha')
                   }
@@ -719,22 +720,48 @@ function FilterChip({
   )
 }
 
+function assigneeLabel(assignee: OrgItem['assignee']): {
+  key: string
+  name: string
+  emoji: string
+  color: string
+  soft: string
+} {
+  if (assignee === 'todos') {
+    return { key: 'todos', name: 'Todos', emoji: '👥', color: '#ea580c', soft: '#ffedd5' }
+  }
+  const member = assignee === 'bebe' ? null : memberByKey(assignee)
+  if (member) {
+    return {
+      key: member.key,
+      name: member.name,
+      emoji: member.emoji,
+      color: member.color,
+      soft: member.colorSoft,
+    }
+  }
+  return { key: 'todos', name: 'Todos', emoji: '👥', color: '#ea580c', soft: '#ffedd5' }
+}
+
 function ItemRow({
   item,
   onToggle,
   onEdit,
   onDelete,
   emphasizeDaily,
+  emphasizeAssignee,
 }: {
   item: OrgItem
   onToggle: () => void
   onEdit: () => void
   onDelete: () => void
   emphasizeDaily?: boolean
+  /** Larger «Para · Name» tag — used on agenda citas/compromisos. */
+  emphasizeAssignee?: boolean
 }) {
-  const member = item.assignee === 'todos' || item.assignee === 'bebe' ? null : memberByKey(item.assignee)
-  const color = member?.color || '#ea580c'
-  const soft = member?.colorSoft || '#ffedd5'
+  const who = assigneeLabel(item.assignee)
+  const color = who.color
+  const soft = who.soft
   const kindStyle = KIND_COLORS[item.kind]
   const done = item.status === 'hecha'
 
@@ -765,10 +792,25 @@ function ItemRow({
             {kindLabel(item.kind)}
           </span>
           <span
-            className="rounded-full px-2 py-0.5 text-[10px] font-extrabold"
+            className={
+              emphasizeAssignee
+                ? 'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-extrabold shadow-sm ring-1 ring-black/5'
+                : 'rounded-full px-2 py-0.5 text-[10px] font-extrabold'
+            }
             style={{ background: soft, color }}
+            data-testid="assignee-label"
+            data-assignee={who.key}
+            title={`Aviso para ${who.name}`}
           >
-            {member ? `${member.emoji} ${member.name}` : '👥 Todos'}
+            {emphasizeAssignee ? (
+              <>
+                <span className="opacity-80">Para</span>
+                <span aria-hidden>{who.emoji}</span>
+                <span>{who.name}</span>
+              </>
+            ) : (
+              `${who.emoji} ${who.name}`
+            )}
           </span>
         </div>
         {item.notes ? <p className="mt-0.5 text-sm text-[var(--ink-soft)]">{item.notes}</p> : null}
