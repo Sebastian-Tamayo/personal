@@ -6,6 +6,7 @@ self.addEventListener('push', (event) => {
     title: 'Familia Hellen y Mati',
     body: 'Tienes un aviso de la agenda.',
     url: '/personal/familia/',
+    tag: 'familia-agenda',
   }
   try {
     if (event.data) {
@@ -21,19 +22,33 @@ self.addEventListener('push', (event) => {
     }
   }
 
+  const title = data.title || 'Familia Hellen y Mati'
+  const body = data.body || ''
+  const url = data.url || '/personal/familia/'
+  const tag = data.tag || 'familia-agenda'
+
+  // iOS Web Push is picky: prefer a minimal option set that always shows a banner.
+  // (requireInteraction / exotic fields have caused silent showNotification failures.)
   event.waitUntil(
-    self.registration.showNotification(data.title || 'Familia Hellen y Mati', {
-      body: data.body || '',
-      icon: '/personal/familia/icons/pwa-192.png',
-      badge: '/personal/familia/icons/pwa-192.png',
-      data: { url: data.url || '/personal/familia/' },
-      lang: 'es',
-      tag: data.tag || 'familia-agenda',
-      renotify: true,
-      // iOS / APNs via Web Push: keep notification visible until user acts
-      requireInteraction: true,
-      silent: false,
-    }),
+    (async () => {
+      try {
+        await self.registration.showNotification(title, {
+          body,
+          icon: '/personal/familia/icons/pwa-192.png',
+          badge: '/personal/familia/icons/pwa-192.png',
+          data: { url },
+          lang: 'es',
+          tag,
+          renotify: true,
+        })
+      } catch {
+        await self.registration.showNotification(title, {
+          body,
+          data: { url },
+          tag,
+        })
+      }
+    })(),
   )
 })
 

@@ -9,8 +9,10 @@ import {
   dismissPushPromptSession,
   enablePushNotifications,
   getPushStatus,
+  isLikelyIos,
   isPushConfigured,
   isPushPromptSessionDismissed,
+  isStandaloneDisplay,
   isThisUserPushActive,
   pushConfigBlockReason,
   type PushStatus,
@@ -142,6 +144,7 @@ export function PushOptIn() {
   if (sessionHidden) return null
 
   const unsupported = status === 'unsupported' || status === 'missing-vapid'
+  const iosNeedsHomeScreen = isLikelyIos() && !isStandaloneDisplay()
 
   return (
     <section
@@ -168,6 +171,15 @@ export function PushOptIn() {
         <span className="font-extrabold">Agenda · citas y compromisos</span> (no para tareas
         diarias de casa). Lore y Hellen aprueban por separado.
       </p>
+      {iosNeedsHomeScreen ? (
+        <p
+          className="mb-3 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-950"
+          data-testid="ios-homescreen-hint"
+        >
+          En iPhone: Safari → Compartir → <span className="font-extrabold">Añadir a inicio</span>.
+          Abre la app desde ese icono (no desde Safari) y luego toca Activar avisos. iOS 16.4+.
+        </p>
+      ) : null}
       <ul className="mb-3 list-disc space-y-1 pl-4 text-xs font-semibold text-[#0c4a6e]/90">
         <li>
           Solo <span className="font-extrabold">citas y compromisos</span> con fecha y hora — las

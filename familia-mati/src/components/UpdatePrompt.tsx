@@ -1,7 +1,11 @@
 import { RefreshCw } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { registerSW } from 'virtual:pwa-register'
 import { FAMILIA_VERSION_URL, readDomFamiliaBuild } from '../lib/familiaBuild'
+import {
+  ensureFamiliaServiceWorker,
+  getFamiliaSwUpdater,
+  onFamiliaSwNeedRefresh,
+} from '../lib/registerPwa'
 
 /**
  * Prompts for a hard update when:
@@ -11,7 +15,6 @@ import { FAMILIA_VERSION_URL, readDomFamiliaBuild } from '../lib/familiaBuild'
 export function UpdatePrompt() {
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
-  const updateSWRef = useRef<((reloadPage?: boolean) => Promise<void>) | undefined>(undefined)
   const pendingRemoteRef = useRef<string | null>(null)
 
   const show = useCallback((remote?: string | null) => {
@@ -37,13 +40,8 @@ export function UpdatePrompt() {
   }, [show])
 
   useEffect(() => {
-    updateSWRef.current = registerSW({
-      immediate: true,
-      onNeedRefresh() {
-        show(null)
-      },
-    })
-
+    ensureFamiliaServiceWorker()
+    const off = onFamiliaSwNeedRefresh(() => show(null))
     void checkRemoteBuild()
     const onVis = () => {
       if (document.visibilityState === 'visible') void checkRemoteBuild()
@@ -51,6 +49,7 @@ export function UpdatePrompt() {
     document.addEventListener('visibilitychange', onVis)
     const timer = window.setInterval(() => void checkRemoteBuild(), 90_000)
     return () => {
+      off()
       document.removeEventListener('visibilitychange', onVis)
       window.clearInterval(timer)
     }
@@ -64,7 +63,7 @@ export function UpdatePrompt() {
         const keys = await caches.keys()
         await Promise.all(keys.map((k) => caches.delete(k)))
       }
-      const updateSW = updateSWRef.current
+      const updateSW = getFamiliaSwUpdater()
       if (updateSW) {
         await updateSW(true)
       } else {

@@ -476,7 +476,7 @@ async function main() {
               keys: { p256dh: s.keys.p256dh, auth: s.keys.auth },
             },
             payload,
-            { TTL: 300, urgency: 'high' },
+            { TTL: 60 * 60 * 24, urgency: 'high' },
           )
           okCount++
           sent++
@@ -493,6 +493,12 @@ async function main() {
             await db.collection('familia_push_subs').doc(s.id).set({ enabled: false, dead: true }, { merge: true })
           }
         }
+      }
+
+      // Only mark sent when at least one device accepted — otherwise retry next cron.
+      if (okCount === 0) {
+        skipped++
+        continue
       }
 
       await sentRef.set({

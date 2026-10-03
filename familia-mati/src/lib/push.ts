@@ -41,6 +41,22 @@ export function pushConfigBlockReason(): 'ok' | 'no-vapid' | 'no-firebase' | 'no
   return 'ok'
 }
 
+export function isLikelyIos(): boolean {
+  if (typeof navigator === 'undefined') return false
+  const ua = navigator.userAgent || ''
+  if (/iPad|iPhone|iPod/.test(ua)) return true
+  // iPadOS 13+ may report as Mac
+  return navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1
+}
+
+/** iOS Web Push only works from the Home Screen PWA, not Safari tabs. */
+export function isStandaloneDisplay(): boolean {
+  if (typeof window === 'undefined') return false
+  const nav = window.navigator as Navigator & { standalone?: boolean }
+  if (nav.standalone === true) return true
+  return window.matchMedia('(display-mode: standalone)').matches
+}
+
 export function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4)
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/')
@@ -111,9 +127,10 @@ export type PushStatus =
   | 'subscribed'
   | 'unsubscribed'
 
-async function getServiceWorkerRegistration(timeoutMs = 4000): Promise<ServiceWorkerRegistration | null> {
+async function getServiceWorkerRegistration(timeoutMs = 12000): Promise<ServiceWorkerRegistration | null> {
   if (!('serviceWorker' in navigator)) return null
   try {
+    // Kick registration if main.tsx already called ensureFamiliaServiceWorker
     const ready = navigator.serviceWorker.ready
     const timed = new Promise<null>((resolve) => {
       window.setTimeout(() => resolve(null), timeoutMs)
@@ -204,11 +221,34 @@ export async function getPushStatus(uid: string, memberKey: string): Promise<Pus
 
 export async function enablePushNotifications(uid: string, memberKey: string): Promise<void> {
   if (!isPushConfigured()) throw new Error('Avisos no disponibles en este dispositivo o falta VAPID.')
+
+  if (isLikelyIos() && !isStandaloneDisplay()) {
+    throw new Error(
+      'En iPhone los avisos solo funcionan si abres Familia desde el icono en la pantalla de inicio (Añadir a inicio). No uses Safari suelto.',
+    )
+  }
+
   const permission = await Notification.requestPermission()
   if (permission !== 'granted') throw new Error('Permiso de notificaciones denegado.')
 
-  const reg = await navigator.serviceWorker.ready
+  const reg = await getServiceWorkerRegistration(15000)
+  if (!reg) {
+    throw new Error(
+      'Service worker no listo. Cierra la app, ábrela otra vez desde el icono de inicio y vuelve a Activar avisos.',
+    )
+  }
+
   let sub = await reg.pushManager.getSubscription()
+  const jsonExisting = sub?.toJSON()
+  const keysOk = Boolean(jsonExisting?.keys?.p256dh && jsonExisting?.keys?.auth)
+  if (sub && !keysOk) {
+    try {
+      await sub.unsubscribe()
+    } catch {
+      /* ignore */
+    }
+    sub = null
+  }
   if (!sub) {
     sub = await reg.pushManager.subscribe({
       userVisibleOnly: true,
@@ -218,10 +258,13 @@ export async function enablePushNotifications(uid: string, memberKey: string): P
 
   const json = sub.toJSON()
   const endpoint = json.endpoint || sub.endpoint
+  if (!endpoint || !json.keys?.p256dh || !json.keys?.auth) {
+    throw new Error('La suscripción push no devolvió claves. Prueba otra vez desde el icono de inicio.')
+  }
   const deviceId = await sha256Hex(endpoint)
   const keys = {
-    p256dh: json.keys?.p256dh || '',
-    auth: json.keys?.auth || '',
+    p256dh: json.keys.p256dh,
+    auth: json.keys.auth,
   }
   const payload = {
     uid,
@@ -232,6 +275,8 @@ export async function enablePushNotifications(uid: string, memberKey: string): P
     userAgent: navigator.userAgent.slice(0, 240),
     updatedAt: Date.now(),
     enabled: true,
+    platformHint: isLikelyIos() ? 'ios' : 'other',
+    standalone: isStandaloneDisplay(),
   }
 
   // Device endpoint doc — current active persona owns delivery on this phone
