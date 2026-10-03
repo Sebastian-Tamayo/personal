@@ -10,6 +10,10 @@ on:
     # Dense backup: GH schedule gaps of hours have missed lead windows (e.g. 09:30 Madrid).
     - cron: '*/5 * * * *'
   workflow_dispatch:
+  # Prefer pinging familia-agenda-reminders-scheduled via repository_dispatch from
+  # cron-job.org; this backup remains a native GH fallback only.
+  repository_dispatch:
+    types: [familia-agenda-backup-ping]
 
 permissions:
   actions: write

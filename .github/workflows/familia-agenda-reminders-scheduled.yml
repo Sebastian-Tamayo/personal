@@ -1,5 +1,7 @@
-# Fresh workflow id to force GitHub to re-register schedules (old file kept disabled).
-# UTC crons. Reminder math uses Europe/Madrid in the script.
+# UTC crons + external pings. Reminder math uses Europe/Madrid in the script.
+# GitHub `schedule` often lags for hours — use external cron (cron-job.org) via
+# repository_dispatch event_type familia-agenda-remind | familia-agenda-ping.
+# Secrets required (already on repo): FIREBASE_SERVICE_ACCOUNT_JSON, VAPID_*.
 name: Familia agenda reminders scheduled
 
 on:
@@ -8,7 +10,7 @@ on:
     - cron: '8,23,38,53 * * * *'
   workflow_dispatch:
   repository_dispatch:
-    types: [familia-agenda-remind]
+    types: [familia-agenda-remind, familia-agenda-ping]
 
 permissions:
   contents: read
@@ -25,6 +27,8 @@ jobs:
       - name: Cron heartbeat
         run: |
           echo "event=${{ github.event_name }}"
+          echo "event_action=${{ github.event.action }}"
+          echo "dispatch_source=${{ github.event.client_payload.source }}"
           echo "utc=$(date -u -Iseconds)"
           echo "madrid=$(TZ=Europe/Madrid date -Iseconds)"
           echo "ref=${{ github.ref }}"
