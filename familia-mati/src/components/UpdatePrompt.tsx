@@ -7,15 +7,26 @@ import {
   onFamiliaSwNeedRefresh,
 } from '../lib/registerPwa'
 
+function hardReload() {
+  const url = new URL(window.location.href)
+  url.searchParams.set('_r', String(Date.now()))
+  // Drop overlay busy state can't help if reload hangs — navigate away.
+  window.location.replace(url.toString())
+}
+
 /**
  * Prompts for a hard update when:
  * - a new service worker is waiting (vite-plugin-pwa prompt), or
  * - network `familia-version.json` (NetworkOnly) differs from the running meta build.
+ *
+ * Actualizar always ends in a hard reload (with timeout) so iOS never stays on
+ * «Actualizando…» if updateSW(true) has nothing waiting / never resolves.
  */
 export function UpdatePrompt() {
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const pendingRemoteRef = useRef<string | null>(null)
+  const reloadArmed = useRef(false)
 
   const show = useCallback((remote?: string | null) => {
     if (remote) pendingRemoteRef.current = remote
@@ -56,8 +67,14 @@ export function UpdatePrompt() {
   }, [checkRemoteBuild, show])
 
   async function onActualizar() {
-    if (busy) return
+    if (busy || reloadArmed.current) return
+    reloadArmed.current = true
     setBusy(true)
+
+    // Always escape hatch — updateSW(true) often never resolves when the prompt
+    // came from version.json mismatch (no waiting worker yet).
+    const failsafe = window.setTimeout(() => hardReload(), 2500)
+
     try {
       if ('caches' in window) {
         const keys = await caches.keys()
@@ -65,14 +82,16 @@ export function UpdatePrompt() {
       }
       const updateSW = getFamiliaSwUpdater()
       if (updateSW) {
-        await updateSW(true)
-      } else {
-        const url = new URL(window.location.href)
-        url.searchParams.set('_r', String(Date.now()))
-        window.location.replace(url.toString())
+        await Promise.race([
+          updateSW(true),
+          new Promise<void>((resolve) => window.setTimeout(resolve, 2000)),
+        ])
       }
     } catch {
-      window.location.reload()
+      /* fall through to hard reload */
+    } finally {
+      window.clearTimeout(failsafe)
+      hardReload()
     }
   }
 
@@ -103,6 +122,16 @@ export function UpdatePrompt() {
           <RefreshCw className={`size-6 ${busy ? 'animate-spin' : ''}`} aria-hidden />
           {busy ? 'Actualizando…' : 'Actualizar'}
         </button>
+        {busy ? (
+          <button
+            type="button"
+            className="mt-3 text-sm font-bold text-[var(--accent-deep)] underline"
+            onClick={() => hardReload()}
+            data-testid="actualizar-force"
+          >
+            Si se queda pillado, toca aquí
+          </button>
+        ) : null}
       </div>
     </div>
   )
