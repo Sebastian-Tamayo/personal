@@ -2,7 +2,8 @@ import { Bell, BellRing, Clock3, X } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import {
   DEFAULT_REMINDER_LEAD_MINUTES,
-  REMINDER_LEAD_PRESETS,
+  leadDisplayFromMinutes,
+  leadMinutesFromDisplay,
   normalizeReminderLeadMinutes,
   resolveMemberLabel,
 } from '../lib/family'
@@ -17,6 +18,8 @@ import {
   type PushStatus,
 } from '../lib/push'
 import { useAuthStore } from '../store/authStore'
+
+type LeadUnit = 'min' | 'h'
 
 /**
  * Per active persona (Sebas / Lore / Hellen), not per Auth email alone.
@@ -33,6 +36,8 @@ export function PushOptIn() {
   const [leadError, setLeadError] = useState<string | null>(null)
   const [sessionHidden, setSessionHidden] = useState(false)
   const [ready, setReady] = useState(false)
+  const [leadAmount, setLeadAmount] = useState('2')
+  const [leadUnit, setLeadUnit] = useState<LeadUnit>('h')
 
   const uid = user?.uid
   const memberKey = profile?.memberKey
@@ -48,6 +53,10 @@ export function PushOptIn() {
       isThisUserPushActive(uid, memberKey),
     ])
     setStatus(active ? 'subscribed' : s)
+    // QA/screenshot helper: sessionStorage.familia-shot-lead=1 shows lead editor
+    if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('familia-shot-lead') === '1') {
+      setStatus('subscribed')
+    }
     setSessionHidden(isPushPromptSessionDismissed(uid, memberKey))
     setReady(true)
   }, [uid, memberKey])
@@ -56,6 +65,16 @@ export function PushOptIn() {
     setReady(false)
     void refresh()
   }, [refresh])
+
+  useEffect(() => {
+    if (!profile) return
+    const mins = normalizeReminderLeadMinutes(
+      profile.reminderLeadMinutes ?? DEFAULT_REMINDER_LEAD_MINUTES,
+    )
+    const d = leadDisplayFromMinutes(mins)
+    setLeadAmount(String(d.amount))
+    setLeadUnit(d.unit)
+  }, [profile?.reminderLeadMinutes, profile?.memberKey])
 
   if (!user || !profile || !ready) return null
 
@@ -83,14 +102,18 @@ export function PushOptIn() {
     setSessionHidden(true)
   }
 
-  async function onLeadChange(minutes: number) {
-    if (minutes === leadMinutes) return
+  async function onSaveLead() {
+    const next = leadMinutesFromDisplay(Number(leadAmount), leadUnit)
+    if (next === leadMinutes) return
     setLeadBusy(true)
     setLeadError(null)
     try {
-      await updateReminderLeadMinutes(minutes)
+      await updateReminderLeadMinutes(next)
+      const d = leadDisplayFromMinutes(next)
+      setLeadAmount(String(d.amount))
+      setLeadUnit(d.unit)
     } catch (e) {
-      setLeadError(e instanceof Error ? e.message : 'No se pudo guardar la antelación.')
+      setLeadError(e instanceof Error ? e.message : 'No se pudo guardar.')
     } finally {
       setLeadBusy(false)
     }
@@ -107,27 +130,60 @@ export function PushOptIn() {
           <Clock3 className="size-5" aria-hidden />
           Elegimos el tiempo del aviso
         </h2>
-        <div className="flex flex-wrap gap-2" role="group" aria-label="Antelación del aviso">
-          {REMINDER_LEAD_PRESETS.map((p) => {
-            const selected = p.minutes === leadMinutes
-            return (
+        <div className="flex items-stretch gap-2" data-testid="lead-free-input">
+          <input
+            type="number"
+            inputMode="numeric"
+            min={1}
+            step={1}
+            value={leadAmount}
+            onChange={(e) => setLeadAmount(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                void onSaveLead()
+              }
+            }}
+            className="w-24 rounded-xl border-2 border-[#7dd3fc] bg-white px-3 py-2.5 text-center text-base font-extrabold text-[#0369a1] outline-none focus:ring-2 focus:ring-[#0284c7]"
+            aria-label="Cantidad"
+            data-testid="lead-amount"
+          />
+          <div
+            className="grid flex-1 grid-cols-2 overflow-hidden rounded-xl border-2 border-[#7dd3fc] bg-white"
+            role="group"
+            aria-label="Unidad"
+          >
+            {(
+              [
+                ['min', 'min'],
+                ['h', 'h'],
+              ] as const
+            ).map(([id, label]) => (
               <button
-                key={p.minutes}
+                key={id}
                 type="button"
-                disabled={leadBusy}
-                onClick={() => void onLeadChange(p.minutes)}
+                onClick={() => setLeadUnit(id)}
                 className={
-                  selected
-                    ? 'rounded-xl bg-[#0284c7] px-3 py-2.5 text-sm font-extrabold text-white shadow-sm disabled:opacity-60'
-                    : 'rounded-xl border-2 border-[#7dd3fc] bg-white/90 px-3 py-2.5 text-sm font-bold text-[#0369a1] hover:bg-[#e0f2fe] disabled:opacity-60'
+                  leadUnit === id
+                    ? 'bg-[#0284c7] px-2 py-2.5 text-sm font-extrabold text-white'
+                    : 'px-2 py-2.5 text-sm font-bold text-[#0369a1]'
                 }
-                aria-pressed={selected}
-                data-testid={`lead-preset-${p.minutes}`}
+                aria-pressed={leadUnit === id}
+                data-testid={`lead-unit-${id}`}
               >
-                {p.label}
+                {label}
               </button>
-            )
-          })}
+            ))}
+          </div>
+          <button
+            type="button"
+            disabled={leadBusy || !leadAmount}
+            onClick={() => void onSaveLead()}
+            className="rounded-xl bg-[#0284c7] px-3 py-2.5 text-sm font-extrabold text-white disabled:opacity-60"
+            data-testid="lead-save"
+          >
+            OK
+          </button>
         </div>
         {leadError ? (
           <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900" role="alert">

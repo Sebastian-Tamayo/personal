@@ -117,7 +117,7 @@ export interface OrgItem {
   createdBy: string
 }
 
-/** Presets for “Avisar con antelación” (minutes before event). Default 2 h. */
+/** Free lead time before event (minutes). Default 2 h. Kept for labels / migrations. */
 export const REMINDER_LEAD_PRESETS = [
   { minutes: 30, label: '30 min' },
   { minutes: 60, label: '1 h' },
@@ -127,17 +127,44 @@ export const REMINDER_LEAD_PRESETS = [
 ] as const
 
 export const DEFAULT_REMINDER_LEAD_MINUTES = 120
+/** 1 minute … 7 days */
+export const MIN_REMINDER_LEAD_MINUTES = 1
+export const MAX_REMINDER_LEAD_MINUTES = 7 * 24 * 60
 
+/** Accept any positive custom lead (minutes). Falls back to default if invalid. */
 export function normalizeReminderLeadMinutes(raw: unknown): number {
-  const n = Number(raw)
+  const n = Math.round(Number(raw))
   if (!Number.isFinite(n)) return DEFAULT_REMINDER_LEAD_MINUTES
-  const allowed = REMINDER_LEAD_PRESETS.map((p) => p.minutes)
-  return allowed.includes(n as (typeof allowed)[number]) ? n : DEFAULT_REMINDER_LEAD_MINUTES
+  if (n < MIN_REMINDER_LEAD_MINUTES || n > MAX_REMINDER_LEAD_MINUTES) {
+    return DEFAULT_REMINDER_LEAD_MINUTES
+  }
+  return n
 }
 
 export function formatLeadLabel(minutes: number): string {
-  const preset = REMINDER_LEAD_PRESETS.find((p) => p.minutes === minutes)
-  return preset?.label || `${minutes} min`
+  const m = normalizeReminderLeadMinutes(minutes)
+  if (m % 1440 === 0) {
+    const d = m / 1440
+    return d === 1 ? '1 día' : `${d} días`
+  }
+  if (m % 60 === 0) {
+    const h = m / 60
+    return h === 1 ? '1 h' : `${h} h`
+  }
+  return `${m} min`
+}
+
+/** Prefer hours in the editor when the stored value is a whole number of hours. */
+export function leadDisplayFromMinutes(minutes: number): { amount: number; unit: 'min' | 'h' } {
+  const m = normalizeReminderLeadMinutes(minutes)
+  if (m >= 60 && m % 60 === 0) return { amount: m / 60, unit: 'h' }
+  return { amount: m, unit: 'min' }
+}
+
+export function leadMinutesFromDisplay(amount: number, unit: 'min' | 'h'): number {
+  const n = Math.round(Number(amount))
+  if (!Number.isFinite(n) || n <= 0) return DEFAULT_REMINDER_LEAD_MINUTES
+  return normalizeReminderLeadMinutes(unit === 'h' ? n * 60 : n)
 }
 
 /** Login personas available on one Auth account (legacy Lore+Hellen share email). */

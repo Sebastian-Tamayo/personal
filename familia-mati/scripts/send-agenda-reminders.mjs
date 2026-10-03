@@ -21,22 +21,30 @@ import { join } from 'node:path'
 
 const require = createRequire(import.meta.url)
 
-const LEAD_PRESETS = new Set([30, 60, 120, 180, 1440])
 const DEFAULT_LEAD_MINUTES = 120
+const MIN_LEAD_MINUTES = 1
+const MAX_LEAD_MINUTES = 7 * 24 * 60
 
+/** Free custom lead (minutes). Invalid → default 120. */
 function normalizeLeadMinutes(raw) {
-  const n = Number(raw)
-  if (!Number.isFinite(n) || !LEAD_PRESETS.has(n)) return DEFAULT_LEAD_MINUTES
+  const n = Math.round(Number(raw))
+  if (!Number.isFinite(n) || n < MIN_LEAD_MINUTES || n > MAX_LEAD_MINUTES) {
+    return DEFAULT_LEAD_MINUTES
+  }
   return n
 }
 
 function formatLeadBody(minutes) {
-  if (minutes === 30) return 'En ~30 min'
-  if (minutes === 60) return 'En ~1 h'
-  if (minutes === 120) return 'En ~2 h'
-  if (minutes === 180) return 'En ~3 h'
-  if (minutes === 1440) return 'En ~1 día'
-  return `En ~${minutes} min`
+  const m = normalizeLeadMinutes(minutes)
+  if (m % 1440 === 0) {
+    const d = m / 1440
+    return d === 1 ? 'En ~1 día' : `En ~${d} días`
+  }
+  if (m % 60 === 0) {
+    const h = m / 60
+    return h === 1 ? 'En ~1 h' : `En ~${h} h`
+  }
+  return `En ~${m} min`
 }
 
 function loadVapid() {
