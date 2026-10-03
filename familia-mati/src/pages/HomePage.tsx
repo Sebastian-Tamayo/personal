@@ -226,13 +226,14 @@ export function HomePage() {
     setAgendaBusy(true)
     try {
       if (agendaEditing) {
+        // Time is immutable after create — changing it would skip a fresh push aviso.
         await updateItem(agendaEditing.id, {
           title: agendaTitle,
           notes: agendaNotes,
           kind: agendaKind,
           assignee: agendaAssignee,
           date: agendaDate,
-          time: agendaTime,
+          time: agendaEditing.time,
           status: agendaEditing.status,
         })
       } else {
@@ -574,15 +575,28 @@ export function HomePage() {
                 accent="#0f766e"
                 testId="agenda-date-stepper"
               />
-              <label className="text-sm">
-                <span className="mb-1 block font-bold text-[var(--ink-soft)]">Hora</span>
-                <input
-                  type="time"
-                  value={agendaTime}
-                  onChange={(e) => setAgendaTime(e.target.value)}
-                  className="w-full rounded-xl border border-[var(--line)] bg-white px-3 py-2.5"
-                />
-              </label>
+              {agendaEditing ? (
+                <div className="text-sm" data-testid="agenda-time-locked">
+                  <span className="mb-1 block font-bold text-[var(--ink-soft)]">Hora</span>
+                  <p className="rounded-xl border border-dashed border-[#0f766e]/35 bg-[#f0fdfa] px-3 py-2.5 font-extrabold text-[#0f766e]">
+                    {agendaEditing.time || '—'}
+                  </p>
+                  <p className="mt-1 text-[11px] font-semibold leading-snug text-[#0f766e]/75">
+                    Para cambiar la hora, elimina y crea de nuevo
+                  </p>
+                </div>
+              ) : (
+                <label className="text-sm">
+                  <span className="mb-1 block font-bold text-[var(--ink-soft)]">Hora</span>
+                  <input
+                    type="time"
+                    value={agendaTime}
+                    onChange={(e) => setAgendaTime(e.target.value)}
+                    className="w-full rounded-xl border border-[var(--line)] bg-white px-3 py-2.5"
+                    data-testid="agenda-time-input"
+                  />
+                </label>
+              )}
               <button
                 type="submit"
                 disabled={agendaBusy}

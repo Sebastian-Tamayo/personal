@@ -102,15 +102,15 @@ export function PushOptIn() {
   if (status === 'subscribed') {
     return (
       <section
-        className="rounded-2xl border border-[#7dd3fc] bg-gradient-to-br from-[#f0f9ff] to-[#e0f2fe]/80 p-4 shadow-[var(--shadow)]"
+        className="rounded-2xl border border-[#7dd3fc] bg-gradient-to-br from-[#f0f9ff] to-[#e0f2fe]/80 px-3 py-2.5 shadow-[var(--shadow)]"
         data-testid="avisos-lead-settings"
         data-avisos-user={profile.memberKey}
       >
-        <h2 className="mb-3 flex items-center gap-2 text-lg font-extrabold text-[#0369a1]">
-          <Clock3 className="size-5" aria-hidden />
+        <h2 className="mb-1.5 flex items-center gap-1.5 text-sm font-extrabold text-[#0369a1]">
+          <Clock3 className="size-4 shrink-0" aria-hidden />
           Elegimos el tiempo del aviso
         </h2>
-        <div className="flex flex-wrap gap-2" role="group" aria-label="Antelación del aviso">
+        <div className="flex flex-wrap gap-1.5" role="group" aria-label="Antelación del aviso">
           {REMINDER_LEAD_PRESETS.map((p) => {
             const selected = p.minutes === leadMinutes
             return (
@@ -121,8 +121,8 @@ export function PushOptIn() {
                 onClick={() => void onLeadChange(p.minutes)}
                 className={
                   selected
-                    ? 'rounded-xl bg-[#0284c7] px-3 py-2.5 text-sm font-extrabold text-white shadow-sm disabled:opacity-60'
-                    : 'rounded-xl border-2 border-[#7dd3fc] bg-white/90 px-3 py-2.5 text-sm font-bold text-[#0369a1] hover:bg-[#e0f2fe] disabled:opacity-60'
+                    ? 'rounded-full bg-[#0284c7] px-2.5 py-1 text-xs font-extrabold text-white shadow-sm disabled:opacity-60'
+                    : 'rounded-full border border-[#7dd3fc] bg-white/90 px-2.5 py-1 text-xs font-bold text-[#0369a1] hover:bg-[#e0f2fe] disabled:opacity-60'
                 }
                 aria-pressed={selected}
                 data-testid={`lead-preset-${p.minutes}`}
