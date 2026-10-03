@@ -22,28 +22,33 @@ import { join } from 'node:path'
 const require = createRequire(import.meta.url)
 
 const DEFAULT_LEAD_MINUTES = 120
-const MIN_LEAD_MINUTES = 1
-const MAX_LEAD_MINUTES = 7 * 24 * 60
+const LEAD_PRESETS = [30, 60, 120, 180, 1440]
+const MAX_LEAD_MINUTES = Math.max(...LEAD_PRESETS)
 
-/** Free custom lead (minutes). Invalid → default 120. */
+/** Snap to nearest preset so UI + cron stay aligned (legacy free-form → nearest). */
 function normalizeLeadMinutes(raw) {
   const n = Math.round(Number(raw))
-  if (!Number.isFinite(n) || n < MIN_LEAD_MINUTES || n > MAX_LEAD_MINUTES) {
-    return DEFAULT_LEAD_MINUTES
+  if (!Number.isFinite(n)) return DEFAULT_LEAD_MINUTES
+  if (LEAD_PRESETS.includes(n)) return n
+  let best = DEFAULT_LEAD_MINUTES
+  let bestDist = Number.POSITIVE_INFINITY
+  for (const p of LEAD_PRESETS) {
+    const d = Math.abs(p - n)
+    if (d < bestDist) {
+      bestDist = d
+      best = p
+    }
   }
-  return n
+  return best
 }
 
 function formatLeadBody(minutes) {
   const m = normalizeLeadMinutes(minutes)
-  if (m % 1440 === 0) {
-    const d = m / 1440
-    return d === 1 ? 'En ~1 día' : `En ~${d} días`
-  }
-  if (m % 60 === 0) {
-    const h = m / 60
-    return h === 1 ? 'En ~1 h' : `En ~${h} h`
-  }
+  if (m === 30) return 'En ~30 min'
+  if (m === 60) return 'En ~1 h'
+  if (m === 120) return 'En ~2 h'
+  if (m === 180) return 'En ~3 h'
+  if (m === 1440) return 'En ~1 día'
   return `En ~${m} min`
 }
 
@@ -244,26 +249,55 @@ async function main() {
 
   const itemsSnap = await db.collection('familia_items').get()
   const agenda = []
+  const skipDiag = []
   for (const doc of itemsSnap.docs) {
     const d = doc.data() || {}
     // Agenda only: cita + tarea (compromisos). Skip chores (tareas diarias) and bebé.
-    if (d.kind === 'chore' || d.kind === 'bebe') continue
-    if (d.kind !== 'cita' && d.kind !== 'tarea') continue
-    if (d.status === 'hecha') continue
+    if (d.kind === 'chore' || d.kind === 'bebe') {
+      skipDiag.push({ id: doc.id, reason: 'kind_skipped', kind: d.kind })
+      continue
+    }
+    if (d.kind !== 'cita' && d.kind !== 'tarea') {
+      skipDiag.push({ id: doc.id, reason: 'kind_unknown', kind: d.kind })
+      continue
+    }
+    if (d.status === 'hecha') {
+      skipDiag.push({ id: doc.id, reason: 'hecha' })
+      continue
+    }
     const date = String(d.date || '')
     const time = String(d.time || '')
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}/.test(time)) continue
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}/.test(time)) {
+      skipDiag.push({
+        id: doc.id,
+        reason: 'bad_datetime',
+        date,
+        time,
+        title: d.title,
+      })
+      continue
+    }
     let eventAt
     try {
       eventAt = eventUtcMs(date, time.slice(0, 5), tz)
     } catch (e) {
       console.warn('skip bad datetime', doc.id, date, time, String(e.message || e))
+      skipDiag.push({ id: doc.id, reason: 'tz_resolve_fail', date, time })
       continue
     }
     // Keep items from max-lead before event through short grace after start
-    const maxLeadMs = 1440 * 60 * 1000
+    const maxLeadMs = MAX_LEAD_MINUTES * 60 * 1000
     if (now < eventAt + windowMs && now >= eventAt - maxLeadMs - windowMs) {
       agenda.push({ id: doc.id, ...d, eventAt })
+    } else {
+      skipDiag.push({
+        id: doc.id,
+        reason: now >= eventAt + windowMs ? 'past_event' : 'outside_lead_horizon',
+        date,
+        time,
+        eventMadrid: new Date(eventAt).toLocaleString('es-ES', { timeZone: tz }),
+        title: d.title,
+      })
     }
   }
 
@@ -277,6 +311,7 @@ async function main() {
         nowMadrid: new Date(now).toLocaleString('es-ES', { timeZone: tz }),
         tz,
         windowMin,
+        skipDiag: skipDiag.slice(0, 30),
       }),
     )
     return

@@ -117,7 +117,7 @@ export interface OrgItem {
   createdBy: string
 }
 
-/** Free lead time before event (minutes). Default 2 h. Kept for labels / migrations. */
+/** Presets for “Avisar con antelación” (minutes before event). Default 2 h. Profile-wide, not per cita. */
 export const REMINDER_LEAD_PRESETS = [
   { minutes: 30, label: '30 min' },
   { minutes: 60, label: '1 h' },
@@ -127,34 +127,35 @@ export const REMINDER_LEAD_PRESETS = [
 ] as const
 
 export const DEFAULT_REMINDER_LEAD_MINUTES = 120
-/** 1 minute … 7 days */
 export const MIN_REMINDER_LEAD_MINUTES = 1
 export const MAX_REMINDER_LEAD_MINUTES = 7 * 24 * 60
 
-/** Accept any positive custom lead (minutes). Falls back to default if invalid. */
+const PRESET_MINUTES = REMINDER_LEAD_PRESETS.map((p) => p.minutes)
+
+/** Snap to a known preset (nearest) so cron + UI stay in sync. */
 export function normalizeReminderLeadMinutes(raw: unknown): number {
   const n = Math.round(Number(raw))
   if (!Number.isFinite(n)) return DEFAULT_REMINDER_LEAD_MINUTES
-  if (n < MIN_REMINDER_LEAD_MINUTES || n > MAX_REMINDER_LEAD_MINUTES) {
-    return DEFAULT_REMINDER_LEAD_MINUTES
+  if ((PRESET_MINUTES as readonly number[]).includes(n)) return n
+  let best = DEFAULT_REMINDER_LEAD_MINUTES
+  let bestDist = Number.POSITIVE_INFINITY
+  for (const p of PRESET_MINUTES) {
+    const d = Math.abs(p - n)
+    if (d < bestDist) {
+      bestDist = d
+      best = p
+    }
   }
-  return n
+  return best
 }
 
 export function formatLeadLabel(minutes: number): string {
   const m = normalizeReminderLeadMinutes(minutes)
-  if (m % 1440 === 0) {
-    const d = m / 1440
-    return d === 1 ? '1 día' : `${d} días`
-  }
-  if (m % 60 === 0) {
-    const h = m / 60
-    return h === 1 ? '1 h' : `${h} h`
-  }
-  return `${m} min`
+  const preset = REMINDER_LEAD_PRESETS.find((p) => p.minutes === m)
+  return preset?.label || `${m} min`
 }
 
-/** Prefer hours in the editor when the stored value is a whole number of hours. */
+/** Prefer hours in editors when value is a whole number of hours. */
 export function leadDisplayFromMinutes(minutes: number): { amount: number; unit: 'min' | 'h' } {
   const m = normalizeReminderLeadMinutes(minutes)
   if (m >= 60 && m % 60 === 0) return { amount: m / 60, unit: 'h' }

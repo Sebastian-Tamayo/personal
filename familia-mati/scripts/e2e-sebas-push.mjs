@@ -10,7 +10,7 @@ import { join } from 'node:path'
 
 const require = createRequire(import.meta.url)
 const TZ = 'Europe/Madrid'
-const LEAD = 120
+const LEAD = 30
 
 function loadSa() {
   const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON
@@ -189,12 +189,12 @@ async function main() {
     return tr?.ok
   })
 
-  // --- 4) E2E cita: event = now + 20 min Madrid; lead 120 → catch-up fires now ---
-  const eventMs = now + 20 * 60 * 1000
+  // --- 4) E2E cita: event = now + 25 min Madrid; lead 30 → remindAt = now-5 → due now ---
+  const eventMs = now + 25 * 60 * 1000
   const { date, time, label: eventMadrid } = madridParts(eventMs)
   const itemRef = await db.collection('familia_items').add({
-    title: 'Prueba aviso Sebas (E2E)',
-    notes: 'Cita de prueba — se puede borrar. Catch-up con lead 120.',
+    title: 'Prueba aviso Sebas 30min (E2E)',
+    notes: 'Cita de prueba Sebas-only — se puede borrar. Lead 30, event ~+25m.',
     kind: 'cita',
     status: 'pendiente',
     assignee: 'sebas',
@@ -281,7 +281,9 @@ async function main() {
       e2eSend.push({ id: s.id.slice(0, 12) + '…', skipped: 'not_in_window' })
       continue
     }
-    const sentRef = db.collection('familia_reminders_sent').doc(`${itemRef.id}_${s.uid || s.id}_${LEAD}m`)
+    const sentRef = db
+      .collection('familia_reminders_sent')
+      .doc(`${itemRef.id}_${s.uid || s.id}_${LEAD}m_${eventAt}`)
     const already = await sentRef.get()
     if (already.exists) {
       e2eSend.push({ id: s.id.slice(0, 12) + '…', skipped: 'already_sent' })
@@ -295,7 +297,7 @@ async function main() {
     })
     const r = await sendPush(webpush, { endpoint: fd.endpoint, keys: fd.keys }, {
       title: 'Familia Hellen y Mati · aviso',
-      body: `En ~2 h: Prueba aviso Sebas (E2E) (${when})`,
+      body: `En ~30 min: Prueba aviso Sebas 30min (E2E) (${when})`,
       url: '/personal/familia/',
       tag: `agenda-${itemRef.id}-${LEAD}`,
     })
@@ -312,7 +314,8 @@ async function main() {
         memberKey: 'sebas',
         uid: s.uid || null,
         deliveredTo: ['sebas'],
-        title: 'Prueba aviso Sebas (E2E)',
+        title: 'Prueba aviso Sebas 30min (E2E)',
+        eventAt,
         remindReason: 'catch_up',
         e2eTest: true,
       })
@@ -321,7 +324,24 @@ async function main() {
     }
   }
 
-  // Also invoke full reminder script path for logging consistency
+  // Production path: run full sender (Sebas-only due item should fire)
+  const { spawnSync } = require('node:child_process')
+  const cronRun = spawnSync(process.execPath, ['scripts/send-agenda-reminders.mjs'], {
+    cwd: process.cwd(),
+    env: process.env,
+    encoding: 'utf8',
+  })
+  let cronJson = null
+  try {
+    const lines = String(cronRun.stdout || '')
+      .trim()
+      .split('\n')
+      .filter(Boolean)
+    cronJson = JSON.parse(lines[lines.length - 1] || '{}')
+  } catch {
+    cronJson = { parseError: true, stdout: String(cronRun.stdout || '').slice(0, 500) }
+  }
+
   const activeAfter = []
   for (const s of sebasSubs) {
     const snap = await s.ref.get()
@@ -375,16 +395,28 @@ async function main() {
           date,
           time,
           eventMadrid,
+          eventAtIso: new Date(eventAt).toISOString(),
+          remindAtIso: new Date(eventAt - LEAD * 60 * 1000).toISOString(),
           leadMinutes: LEAD,
-          mode: 'catch_up (event in ~20m, lead 120 → remindAt in past)',
+          mode: 'due_now (event ~+25m Madrid, lead 30 → remindAt ~now-5m)',
           sent: e2eSent,
           results: e2eSend,
         },
+        productionCron: {
+          status: cronRun.status,
+          sent: cronJson?.sent,
+          activeByMember: cronJson?.activeByMember,
+          targetingSample: (cronJson?.targeting || []).slice(0, 5),
+          errors: cronJson?.errors,
+          nowMadrid: cronJson?.nowMadrid,
+        },
         activeSubsAfter: activeAfter,
         summary_es:
-          testResults.filter((r) => r.ok).length > 0
-            ? `SÍ hay push activo: test HTTP OK en ${testResults.filter((r) => r.ok).length} endpoint(s). E2E agenda envió ${e2eSent}.`
-            : 'NO: ningún endpoint de Sebas aceptó el test push (todos dead/410 o ausentes). Debe reactivar Activar avisos desde la PWA en el iPhone.',
+          e2eSent > 0 || (cronJson?.sent || 0) > 0
+            ? `SÍ: push Sebas OK. E2E directo envió ${e2eSent}; cron production sent=${cronJson?.sent ?? '?'}.`
+            : testResults.filter((r) => r.ok).length > 0
+              ? `Test push OK pero E2E agenda sent=0 (revisar ventana/lead). Cron sent=${cronJson?.sent ?? '?'}.`
+              : 'NO: ningún endpoint de Sebas aceptó push (dead/410). Reactivar Activar avisos en el iPhone.',
       },
       null,
       2,

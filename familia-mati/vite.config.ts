@@ -4,8 +4,8 @@ import { defineConfig } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
 // Nested under GitHub Pages: https://sebastian-tamayo.github.io/personal/familia/
-// Cache-bust bump: chips-deberes-bebe
-export const FAMILIA_PWA_CACHE_ID = 'familia-hellen-mati-v20261003e'
+// Cache-bust bump: avisos-presets-fix
+export const FAMILIA_PWA_CACHE_ID = 'familia-hellen-mati-v20261003f'
 
 export default defineConfig({
   base: '/personal/familia/',
