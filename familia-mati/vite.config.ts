@@ -4,8 +4,8 @@ import { defineConfig } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
 // Nested under GitHub Pages: https://sebastian-tamayo.github.io/personal/familia/
-// Cache-bust bump: iconos-corazon
-export const FAMILIA_PWA_CACHE_ID = 'familia-hellen-mati-v20261002f'
+// Cache-bust bump: panel-compacto
+export const FAMILIA_PWA_CACHE_ID = 'familia-hellen-mati-v20261003a'
 
 export default defineConfig({
   base: '/personal/familia/',
@@ -30,7 +30,7 @@ export default defineConfig({
         display: 'standalone',
         orientation: 'portrait-primary',
         lang: 'es',
-        start_url: '/personal/familia/?v=20261002f',
+        start_url: '/personal/familia/?v=20261003a',
         scope: '/personal/familia/',
         icons: [
           { src: 'icons/pwa-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
