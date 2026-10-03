@@ -1,6 +1,18 @@
-import { CalendarDays, CheckCircle2, Circle, Home, Pencil, Plus, Trash2, X } from 'lucide-react'
+import {
+  CalendarDays,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  Circle,
+  Home,
+  Pencil,
+  Plus,
+  Trash2,
+  X,
+} from 'lucide-react'
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { AppShell } from '../components/AppShell'
+import { Capybara, EmptyCapybara } from '../components/Capybara'
 import { PushOptIn } from '../components/PushOptIn'
 import {
   DAILY_TASK_SUGGESTIONS,
@@ -10,6 +22,7 @@ import {
   kindLabel,
   memberByKey,
   normalizeMemberKey,
+  shiftISODate,
   todayISO,
   type ItemKind,
   type OrgItem,
@@ -18,15 +31,24 @@ import {
 import { useAuthStore } from '../store/authStore'
 import { useOrgStore } from '../store/orgStore'
 
-type AgendaTab = 'hoy' | 'proximos'
+type AgendaTab = 'hoy' | 'proximos' | 'pasados'
 type ParaAssignee = 'sebas' | 'lore' | 'hellen' | 'todos'
-type ViewFilter = 'mine' | 'todos'
+/** Todos = ver todo el hogar; persona = esa persona + compartidos. */
+type ViewFilter = ParaAssignee
 
 const HOUSEHOLD = FAMILY_MEMBERS.filter((m) => m.key === 'sebas' || m.key === 'lore' || m.key === 'hellen')
 
 function asPersona(key: string | null | undefined): PersonaKey | null {
   const n = normalizeMemberKey(key)
   return n === 'sebas' || n === 'lore' || n === 'hellen' ? n : null
+}
+
+function assigneeKey(assignee: string): ParaAssignee {
+  if (assignee === 'bebe') return 'todos'
+  if (assignee === 'sebas' || assignee === 'lore' || assignee === 'hellen' || assignee === 'todos') {
+    return assignee
+  }
+  return 'todos'
 }
 
 export function HomePage() {
@@ -42,14 +64,14 @@ export function HomePage() {
   const deleteItem = useOrgStore((s) => s.deleteItem)
 
   const myKey = asPersona(profile?.memberKey) || 'sebas'
-  const me = memberByKey(myKey)!
 
-  const [viewFilter, setViewFilter] = useState<ViewFilter>('mine')
+  const [viewFilter, setViewFilter] = useState<ViewFilter>('todos')
 
   const [showDailyForm, setShowDailyForm] = useState(false)
   const [dailyTitle, setDailyTitle] = useState('')
   const [dailyNotes, setDailyNotes] = useState('')
   const [dailyAssignee, setDailyAssignee] = useState<ParaAssignee>(myKey)
+  const [dailyDate, setDailyDate] = useState(todayISO())
   const [dailyEditing, setDailyEditing] = useState<OrgItem | null>(null)
   const [dailyBusy, setDailyBusy] = useState(false)
 
@@ -66,7 +88,6 @@ export function HomePage() {
 
   useEffect(() => subscribe(), [subscribe])
 
-  // Keep default Para = active profile when opening a fresh create form.
   useEffect(() => {
     if (!showDailyForm && !dailyEditing) setDailyAssignee(myKey)
     if (!showAgendaForm && !agendaEditing) setAgendaAssignee(myKey)
@@ -74,22 +95,15 @@ export function HomePage() {
 
   const today = todayISO()
 
-  /** Hard rule: never see another person's exclusive items. */
-  const visibleToMe = useMemo(() => {
+  /** Everyone sees all household items; no bebé section (bebe → todos). */
+  const filtered = useMemo(() => {
     return items.filter((i) => {
       if (i.kind === 'bebe') return false
-      const a = i.assignee === 'bebe' ? 'todos' : i.assignee
-      return a === myKey || a === 'todos'
+      const a = assigneeKey(i.assignee)
+      if (viewFilter === 'todos') return true
+      return a === viewFilter || a === 'todos'
     })
-  }, [items, myKey])
-
-  const filtered = useMemo(() => {
-    return visibleToMe.filter((i) => {
-      if (viewFilter === 'todos') return i.assignee === 'todos' || i.assignee === 'bebe'
-      // mine: my exclusive + shared todos
-      return true
-    })
-  }, [visibleToMe, viewFilter])
+  }, [items, viewFilter])
 
   const diariasHoy = filtered.filter(
     (i) =>
@@ -101,7 +115,9 @@ export function HomePage() {
     (i) => i.date === today || (!i.date && i.status === 'pendiente'),
   )
   const agendaProximos = agendaItems.filter((i) => i.date > today)
-  const agendaList = agendaTab === 'hoy' ? agendaHoy : agendaProximos
+  const agendaPasados = agendaItems.filter((i) => !!i.date && i.date < today)
+  const agendaList =
+    agendaTab === 'hoy' ? agendaHoy : agendaTab === 'proximos' ? agendaProximos : agendaPasados
 
   const dailyPending = diariasHoy.filter((i) => i.status === 'pendiente').length
   const dailyDone = diariasHoy.filter((i) => i.status === 'hecha').length
@@ -111,6 +127,7 @@ export function HomePage() {
     setDailyTitle('')
     setDailyNotes('')
     setDailyAssignee(myKey)
+    setDailyDate(todayISO())
     setDailyEditing(null)
     setShowDailyForm(false)
   }
@@ -131,6 +148,7 @@ export function HomePage() {
     setDailyTitle('')
     setDailyNotes('')
     setDailyAssignee(myKey)
+    setDailyDate(todayISO())
     setShowDailyForm(true)
     setShowAgendaForm(false)
   }
@@ -152,13 +170,14 @@ export function HomePage() {
     if (!dailyTitle.trim()) return
     setDailyBusy(true)
     try {
+      const date = dailyDate || todayISO()
       if (dailyEditing) {
         await updateItem(dailyEditing.id, {
           title: dailyTitle,
           notes: dailyNotes,
           kind: 'chore',
           assignee: dailyAssignee,
-          date: dailyEditing.date || todayISO(),
+          date,
           time: dailyEditing.time || '',
           status: dailyEditing.status,
         })
@@ -169,7 +188,7 @@ export function HomePage() {
             notes: dailyNotes,
             kind: 'chore',
             assignee: dailyAssignee,
-            date: todayISO(),
+            date,
             time: '',
           },
           user.uid,
@@ -190,7 +209,7 @@ export function HomePage() {
           notes: '',
           kind: 'chore',
           assignee: myKey,
-          date: todayISO(),
+          date: dailyDate || todayISO(),
           time: '',
         },
         user.uid,
@@ -244,6 +263,7 @@ export function HomePage() {
         ? item.assignee
         : 'todos',
     )
+    setDailyDate(item.date || todayISO())
     setShowDailyForm(true)
     setShowAgendaForm(false)
   }
@@ -269,22 +289,30 @@ export function HomePage() {
 
   return (
     <AppShell title="En casa hoy · citas y compromisos">
-      <section className="animate-rise flex gap-2 overflow-x-auto pb-1">
-        <FilterChip
-          active={viewFilter === 'mine'}
-          label={`${me.emoji} Yo`}
-          color={me.color}
-          soft={me.colorSoft}
-          onClick={() => setViewFilter('mine')}
-        />
+      <section className="animate-rise flex gap-2 overflow-x-auto pb-1" data-testid="filter-chips">
         <FilterChip
           active={viewFilter === 'todos'}
-          label="👥 Solo todos"
+          label="👥 Todos"
           color="#431407"
           soft="#fff7ed"
           onClick={() => setViewFilter('todos')}
         />
+        {HOUSEHOLD.map((m) => (
+          <FilterChip
+            key={m.key}
+            active={viewFilter === m.key}
+            label={`${m.emoji} ${m.name}`}
+            color={m.color}
+            soft={m.colorSoft}
+            onClick={() => setViewFilter(m.key as ParaAssignee)}
+          />
+        ))}
       </section>
+
+      {/* Decorative capybara in the chip/actions gap */}
+      <div className="pointer-events-none flex justify-end pr-1 opacity-80" aria-hidden>
+        <Capybara variant="peek" className="h-10 w-auto" title="" />
+      </div>
 
       {syncError ? (
         <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-800" role="alert">
@@ -294,7 +322,6 @@ export function HomePage() {
 
       <PushOptIn />
 
-      {/* Entry actions */}
       <section className="animate-rise grid grid-cols-2 gap-2">
         <button
           type="button"
@@ -316,7 +343,7 @@ export function HomePage() {
         </button>
       </section>
 
-      {/* ========== TAREAS DIARIAS — list first ========== */}
+      {/* ========== TAREAS DIARIAS ========== */}
       <section className="overflow-hidden rounded-3xl border-2 border-[#ca8a04]/45 bg-gradient-to-br from-[#fef9c3] via-[#fef08a]/70 to-[#fde68a]/40 shadow-[var(--shadow)]">
         <div className="border-b border-[#ca8a04]/25 bg-[#ca8a04]/15 px-4 py-3">
           <h2 className="flex items-center gap-2 text-lg font-extrabold text-[#854d0e]">
@@ -324,7 +351,7 @@ export function HomePage() {
             Tareas diarias
           </h2>
           <p className="mt-0.5 text-xs font-semibold text-[#a16207]">
-            {dailyPending} pendientes · {dailyDone} hechas · solo lo tuyo o Todos
+            {dailyPending} pendientes · {dailyDone} hechas · todos los perfiles
           </p>
         </div>
 
@@ -393,6 +420,13 @@ export function HomePage() {
                   ))}
                 </select>
               </label>
+              <DateStepper
+                label="Fecha"
+                value={dailyDate}
+                onChange={setDailyDate}
+                accent="#ca8a04"
+                testId="daily-date-stepper"
+              />
               <button
                 type="submit"
                 disabled={dailyBusy}
@@ -407,9 +441,15 @@ export function HomePage() {
           {loading ? (
             <p className="text-sm text-[var(--ink-soft)]">Cargando…</p>
           ) : diariasHoy.length === 0 ? (
-            <p className="text-sm text-[var(--ink-soft)]">
-              Nada pendiente. Pulsa <span className="font-extrabold">Nueva tarea</span>.
-            </p>
+            <EmptyCapybara
+              variant="sit"
+              accent="warm"
+              message={
+                <>
+                  Nada pendiente. Pulsa <span className="font-extrabold">Nueva tarea</span>.
+                </>
+              }
+            />
           ) : (
             <ul className="flex flex-col gap-2">
               {diariasHoy.map((item) => (
@@ -431,7 +471,7 @@ export function HomePage() {
         </div>
       </section>
 
-      {/* ========== AGENDA — list first ========== */}
+      {/* ========== AGENDA ========== */}
       <section className="overflow-hidden rounded-3xl border-2 border-[#0f766e]/30 bg-gradient-to-br from-[#f0fdfa] to-[#ccfbf1]/40 shadow-[var(--shadow)]">
         <div className="border-b border-[#0f766e]/20 bg-[#0f766e]/10 px-4 py-3">
           <h2 className="flex items-center gap-2 text-lg font-extrabold text-[#0f766e]">
@@ -444,18 +484,19 @@ export function HomePage() {
         </div>
 
         <div className="space-y-3 p-4">
-          <div className="flex gap-2 rounded-xl bg-[#0f766e]/10 p-1">
+          <div className="flex gap-1 rounded-xl bg-[#0f766e]/10 p-1">
             {(
               [
                 ['hoy', 'Hoy'],
                 ['proximos', 'Próximos'],
+                ['pasados', 'Pasados'],
               ] as const
             ).map(([id, label]) => (
               <button
                 key={id}
                 type="button"
                 onClick={() => setAgendaTab(id)}
-                className={`flex-1 rounded-lg px-2 py-2 text-sm font-extrabold ${
+                className={`flex-1 rounded-lg px-2 py-2 text-xs font-extrabold sm:text-sm ${
                   agendaTab === id ? 'bg-white text-[#0f766e] shadow-sm' : 'text-[#0f766e]/70'
                 }`}
               >
@@ -526,26 +567,22 @@ export function HomePage() {
                   </select>
                 </label>
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                <label className="text-sm">
-                  <span className="mb-1 block font-bold text-[var(--ink-soft)]">Fecha</span>
-                  <input
-                    type="date"
-                    value={agendaDate}
-                    onChange={(e) => setAgendaDate(e.target.value)}
-                    className="w-full rounded-xl border border-[var(--line)] bg-white px-3 py-2.5"
-                  />
-                </label>
-                <label className="text-sm">
-                  <span className="mb-1 block font-bold text-[var(--ink-soft)]">Hora</span>
-                  <input
-                    type="time"
-                    value={agendaTime}
-                    onChange={(e) => setAgendaTime(e.target.value)}
-                    className="w-full rounded-xl border border-[var(--line)] bg-white px-3 py-2.5"
-                  />
-                </label>
-              </div>
+              <DateStepper
+                label="Fecha"
+                value={agendaDate}
+                onChange={setAgendaDate}
+                accent="#0f766e"
+                testId="agenda-date-stepper"
+              />
+              <label className="text-sm">
+                <span className="mb-1 block font-bold text-[var(--ink-soft)]">Hora</span>
+                <input
+                  type="time"
+                  value={agendaTime}
+                  onChange={(e) => setAgendaTime(e.target.value)}
+                  className="w-full rounded-xl border border-[var(--line)] bg-white px-3 py-2.5"
+                />
+              </label>
               <button
                 type="submit"
                 disabled={agendaBusy}
@@ -560,9 +597,19 @@ export function HomePage() {
           {loading ? (
             <p className="text-sm text-[var(--ink-soft)]">Cargando…</p>
           ) : agendaList.length === 0 ? (
-            <p className="text-sm text-[var(--ink-soft)]">
-              Nada aquí. Pulsa <span className="font-extrabold">Nueva cita</span>.
-            </p>
+            <EmptyCapybara
+              variant={agendaTab === 'pasados' ? 'leaf' : 'peek'}
+              accent="teal"
+              message={
+                agendaTab === 'pasados' ? (
+                  <>No hay citas pasadas en este filtro.</>
+                ) : (
+                  <>
+                    Nada aquí. Pulsa <span className="font-extrabold">Nueva cita</span>.
+                  </>
+                )
+              }
+            />
           ) : (
             <ul className="divide-y divide-[#0f766e]/15 rounded-2xl border border-[#0f766e]/15 bg-white/70">
               {agendaList.map((item) => (
@@ -583,6 +630,59 @@ export function HomePage() {
         </div>
       </section>
     </AppShell>
+  )
+}
+
+/** Prev/next day switcher — previous goes into the past (no min=today). */
+function DateStepper({
+  label,
+  value,
+  onChange,
+  accent,
+  testId,
+}: {
+  label: string
+  value: string
+  onChange: (iso: string) => void
+  accent: string
+  testId: string
+}) {
+  return (
+    <div className="text-sm" data-testid={testId}>
+      <span className="mb-1 block font-bold text-[var(--ink-soft)]">{label}</span>
+      <div className="flex items-center gap-1.5">
+        <button
+          type="button"
+          onClick={() => onChange(shiftISODate(value || todayISO(), -1))}
+          className="rounded-xl border border-[var(--line)] bg-white p-2.5 shadow-sm"
+          aria-label="Día anterior"
+          data-testid={`${testId}-prev`}
+          style={{ color: accent }}
+        >
+          <ChevronLeft className="size-5" />
+        </button>
+        <input
+          type="date"
+          value={value}
+          onChange={(e) => onChange(e.target.value || todayISO())}
+          className="min-w-0 flex-1 rounded-xl border border-[var(--line)] bg-white px-3 py-2.5"
+          data-testid={`${testId}-input`}
+        />
+        <button
+          type="button"
+          onClick={() => onChange(shiftISODate(value || todayISO(), 1))}
+          className="rounded-xl border border-[var(--line)] bg-white p-2.5 shadow-sm"
+          aria-label="Día siguiente"
+          data-testid={`${testId}-next`}
+          style={{ color: accent }}
+        >
+          <ChevronRight className="size-5" />
+        </button>
+      </div>
+      <p className="mt-1 text-xs font-semibold" style={{ color: accent }}>
+        {formatDateLabel(value)} · puedes ir a días pasados
+      </p>
+    </div>
   )
 }
 

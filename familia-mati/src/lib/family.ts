@@ -191,6 +191,15 @@ export function todayISO(d = new Date()): string {
   return `${y}-${m}-${day}`
 }
 
+/** Shift an ISO date (YYYY-MM-DD) by ±days. Past days allowed (negative delta). */
+export function shiftISODate(iso: string, deltaDays: number): string {
+  const base = iso && /^\d{4}-\d{2}-\d{2}$/.test(iso) ? iso : todayISO()
+  const [y, m, d] = base.split('-').map(Number)
+  const date = new Date(y, m - 1, d)
+  date.setDate(date.getDate() + deltaDays)
+  return todayISO(date)
+}
+
 export function formatDateLabel(iso: string): string {
   if (!iso) return ''
   const [y, m, d] = iso.split('-').map(Number)
@@ -200,6 +209,9 @@ export function formatDateLabel(iso: string): string {
   const tom = new Date()
   tom.setDate(tom.getDate() + 1)
   if (iso === todayISO(tom)) return 'Mañana'
+  const yer = new Date()
+  yer.setDate(yer.getDate() - 1)
+  if (iso === todayISO(yer)) return 'Ayer'
   return date.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' })
 }
 
