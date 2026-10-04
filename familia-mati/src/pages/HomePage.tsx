@@ -24,13 +24,11 @@ import {
   formatDateLabel,
   kindLabel,
   memberByKey,
-  normalizeMemberKey,
   shiftISODate,
   todayISO,
   type FamiliaRoutine,
   type ItemKind,
   type OrgItem,
-  type PersonaKey,
   type RoutineCadence,
 } from '../lib/family'
 import { useAuthStore } from '../store/authStore'
@@ -39,19 +37,18 @@ import { useRoutinesStore } from '../store/routinesStore'
 
 type AgendaTab = 'hoy' | 'proximos' | 'pasados'
 type ParaAssignee = 'sebas' | 'lore' | 'hellen' | 'todos'
-/** Todos = ver todo el hogar; persona = esa persona + compartidos. */
+/** Todos = ver todo el hogar; persona chip = default «Para» for that person. */
 type ViewFilter = ParaAssignee
 
 const HOUSEHOLD = FAMILY_MEMBERS.filter((m) => m.key === 'sebas' || m.key === 'lore' || m.key === 'hellen')
 
-function asPersona(key: string | null | undefined): PersonaKey | null {
-  const n = normalizeMemberKey(key)
-  return n === 'sebas' || n === 'lore' || n === 'hellen' ? n : null
+/** Default «Para» follows the filter chip — never the logged-in creator. */
+function defaultParaForFilter(filter: ViewFilter): ParaAssignee {
+  return filter
 }
 
 export function HomePage() {
   const user = useAuthStore((s) => s.user)!
-  const profile = useAuthStore((s) => s.profile)
   const items = useOrgStore((s) => s.items)
   const loading = useOrgStore((s) => s.loading)
   const syncError = useOrgStore((s) => s.syncError)
@@ -61,14 +58,12 @@ export function HomePage() {
   const setStatus = useOrgStore((s) => s.setStatus)
   const deleteItem = useOrgStore((s) => s.deleteItem)
 
-  const myKey = asPersona(profile?.memberKey) || 'sebas'
-
   const [viewFilter, setViewFilter] = useState<ViewFilter>('todos')
 
   const [showDailyForm, setShowDailyForm] = useState(false)
   const [dailyTitle, setDailyTitle] = useState('')
   const [dailyNotes, setDailyNotes] = useState('')
-  const [dailyAssignee, setDailyAssignee] = useState<ParaAssignee>(myKey)
+  const [dailyAssignee, setDailyAssignee] = useState<ParaAssignee>('todos')
   const [dailyDate, setDailyDate] = useState(todayISO())
   const [dailyEditing, setDailyEditing] = useState<OrgItem | null>(null)
   const [dailyBusy, setDailyBusy] = useState(false)
@@ -77,7 +72,7 @@ export function HomePage() {
   const [agendaTitle, setAgendaTitle] = useState('')
   const [agendaNotes, setAgendaNotes] = useState('')
   const [agendaKind, setAgendaKind] = useState<ItemKind>('cita')
-  const [agendaAssignee, setAgendaAssignee] = useState<ParaAssignee>(myKey)
+  const [agendaAssignee, setAgendaAssignee] = useState<ParaAssignee>('todos')
   const [agendaDate, setAgendaDate] = useState(todayISO())
   const [agendaTime, setAgendaTime] = useState('')
   const [agendaEditing, setAgendaEditing] = useState<OrgItem | null>(null)
@@ -106,10 +101,10 @@ export function HomePage() {
   useEffect(() => subscribeRoutines(), [subscribeRoutines])
 
   useEffect(() => {
-    const defaultPara: ParaAssignee = viewFilter === 'todos' ? myKey : viewFilter
+    const defaultPara = defaultParaForFilter(viewFilter)
     if (!showDailyForm && !dailyEditing) setDailyAssignee(defaultPara)
     if (!showAgendaForm && !agendaEditing) setAgendaAssignee(defaultPara)
-  }, [myKey, viewFilter, showDailyForm, showAgendaForm, dailyEditing, agendaEditing])
+  }, [viewFilter, showDailyForm, showAgendaForm, dailyEditing, agendaEditing])
 
   const today = todayISO()
 
@@ -137,7 +132,7 @@ export function HomePage() {
   function closeDailyForm() {
     setDailyTitle('')
     setDailyNotes('')
-    setDailyAssignee(myKey)
+    setDailyAssignee(defaultParaForFilter(viewFilter))
     setDailyDate(todayISO())
     setDailyEditing(null)
     setShowDailyForm(false)
@@ -147,7 +142,7 @@ export function HomePage() {
     setAgendaTitle('')
     setAgendaNotes('')
     setAgendaKind('cita')
-    setAgendaAssignee(myKey)
+    setAgendaAssignee(defaultParaForFilter(viewFilter))
     setAgendaDate(todayISO())
     setAgendaTime('')
     setAgendaEditing(null)
@@ -166,7 +161,7 @@ export function HomePage() {
     setDailyEditing(null)
     setDailyTitle('')
     setDailyNotes('')
-    setDailyAssignee(myKey)
+    setDailyAssignee(defaultParaForFilter(viewFilter))
     setDailyDate(todayISO())
     setShowDailyForm(true)
     setShowAgendaForm(false)
@@ -179,7 +174,7 @@ export function HomePage() {
     setAgendaTitle('')
     setAgendaNotes('')
     setAgendaKind('cita')
-    setAgendaAssignee(myKey)
+    setAgendaAssignee(defaultParaForFilter(viewFilter))
     setAgendaDate(todayISO())
     setAgendaTime('')
     setShowAgendaForm(true)
@@ -238,12 +233,14 @@ export function HomePage() {
   async function quickAddDaily(label: string) {
     setDailyBusy(true)
     try {
+      // Badge must show assignee (filter chip / Para), never the creator profile.
+      const assignee = dailyAssignee || defaultParaForFilter(viewFilter)
       await addItem(
         {
           title: label,
           notes: '',
           kind: 'chore',
-          assignee: myKey,
+          assignee,
           date: dailyDate || todayISO(),
           time: '',
         },
@@ -373,7 +370,7 @@ export function HomePage() {
       <section
         className="animate-rise flex gap-2 overflow-x-auto pb-1"
         data-testid="filter-chips"
-        aria-label="Para por defecto al crear (todos ven todas las listas)"
+        aria-label="Filtro y Para por defecto al crear (todos ven todas las listas)"
       >
         <FilterChip
           active={viewFilter === 'todos'}
@@ -551,6 +548,7 @@ export function HomePage() {
                   key={item.id}
                   item={item}
                   emphasizeDaily
+                  emphasizeAssignee
                   onToggle={() =>
                     void setStatus(item.id, item.status === 'hecha' ? 'pendiente' : 'hecha')
                   }
@@ -1043,9 +1041,10 @@ function ItemRow({
   onEdit: () => void
   onDelete: () => void
   emphasizeDaily?: boolean
-  /** Larger «Para · Name» tag — used on agenda citas/compromisos. */
+  /** Larger «Para · Name» tag — assignee (not creator). Daily + agenda. */
   emphasizeAssignee?: boolean
 }) {
+  // Always resolve from item.assignee (who the task/cita is for).
   const who = assigneeLabel(item.assignee)
   const color = who.color
   const soft = who.soft
@@ -1087,7 +1086,7 @@ function ItemRow({
             style={{ background: soft, color }}
             data-testid="assignee-label"
             data-assignee={who.key}
-            title={`Aviso para ${who.name}`}
+            title={`Para ${who.name}`}
           >
             {emphasizeAssignee ? (
               <>
