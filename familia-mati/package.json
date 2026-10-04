@@ -1,7 +1,7 @@
 {
   "name": "familia-mati",
   "private": true,
-  "version": "1.0.12-profile-filter",
+  "version": "1.0.13-nueva-compact",
   "type": "module",
   "scripts": {
     "dev": "vite",

@@ -452,45 +452,33 @@ export function HomePage() {
 
       <PushOptIn />
 
-      <section className="animate-rise grid grid-cols-3 gap-2">
+      <section className="animate-rise grid grid-cols-3 gap-1.5">
         <button
           type="button"
           onClick={openNewDaily}
-          className="inline-flex flex-col items-center justify-center gap-0.5 rounded-2xl border-2 border-[#ca8a04]/50 bg-gradient-to-br from-[#fef9c3] to-[#fde68a] px-2 py-3 text-xs font-extrabold leading-tight text-[#854d0e] shadow-sm sm:text-sm"
+          className="inline-flex min-h-9 items-center justify-center gap-1 rounded-xl border-2 border-[#ca8a04]/50 bg-gradient-to-br from-[#fef9c3] to-[#fde68a] px-1.5 py-1.5 text-[11px] font-extrabold leading-none text-[#854d0e] shadow-sm sm:text-xs"
           data-testid="btn-nueva-tarea"
-          aria-label="Nueva tarea"
         >
-          <span className="inline-flex items-center gap-1">
-            <Plus className="size-4 shrink-0" aria-hidden />
-            Nueva
-          </span>
-          <span>tarea</span>
+          <Plus className="size-3.5 shrink-0" aria-hidden />
+          <span className="whitespace-nowrap">Nueva tarea</span>
         </button>
         <button
           type="button"
           onClick={openNewRoutine}
-          className="inline-flex flex-col items-center justify-center gap-0.5 rounded-2xl border-2 border-[#0369a1]/40 bg-gradient-to-br from-[#e0f2fe] to-[#bae6fd] px-2 py-3 text-xs font-extrabold leading-tight text-[#075985] shadow-sm sm:text-sm"
+          className="inline-flex min-h-9 items-center justify-center gap-1 rounded-xl border-2 border-[#0369a1]/40 bg-gradient-to-br from-[#e0f2fe] to-[#bae6fd] px-1.5 py-1.5 text-[11px] font-extrabold leading-none text-[#075985] shadow-sm sm:text-xs"
           data-testid="btn-nueva-rutina"
-          aria-label="Nueva rutina"
         >
-          <span className="inline-flex items-center gap-1">
-            <Plus className="size-4 shrink-0" aria-hidden />
-            Nueva
-          </span>
-          <span>rutina</span>
+          <Plus className="size-3.5 shrink-0" aria-hidden />
+          <span className="whitespace-nowrap">Nueva rutina</span>
         </button>
         <button
           type="button"
           onClick={openNewAgenda}
-          className="inline-flex flex-col items-center justify-center gap-0.5 rounded-2xl border-2 border-[#0f766e]/40 bg-gradient-to-br from-[#f0fdfa] to-[#ccfbf1] px-2 py-3 text-xs font-extrabold leading-tight text-[#0f766e] shadow-sm sm:text-sm"
+          className="inline-flex min-h-9 items-center justify-center gap-1 rounded-xl border-2 border-[#0f766e]/40 bg-gradient-to-br from-[#f0fdfa] to-[#ccfbf1] px-1.5 py-1.5 text-[11px] font-extrabold leading-none text-[#0f766e] shadow-sm sm:text-xs"
           data-testid="btn-nueva-cita"
-          aria-label="Nueva cita"
         >
-          <span className="inline-flex items-center gap-1">
-            <Plus className="size-4 shrink-0" aria-hidden />
-            Nueva
-          </span>
-          <span>cita</span>
+          <Plus className="size-3.5 shrink-0" aria-hidden />
+          <span className="whitespace-nowrap">Nueva cita</span>
         </button>
       </section>
 
