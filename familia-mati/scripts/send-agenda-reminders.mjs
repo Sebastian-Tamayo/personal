@@ -1,9 +1,13 @@
 #!/usr/bin/env node
 /**
- * Send Web Push for Agenda · citas y compromisos ONLY (kinds: cita, tarea).
- * NEVER notifies for Tareas diarias (kind: chore) or bebé items.
- * Lead time is per-user/persona (familia_users.personaSettings / reminderLeadMinutes); default 120 min.
- * Runs outside the browser (GitHub Actions cron). Mobile Web Push — not email.
+ * Send Web Push for:
+ * 1) Agenda · citas y compromisos ONLY (kinds: cita, tarea).
+ *    NEVER notifies for Tareas diarias (kind: chore) or bebé items.
+ *    Lead time is per-user/persona (familia_users.personaSettings / reminderLeadMinutes); default 120 min.
+ * 2) Rutinas digest — ONE push/day at ~16:00 Europe/Madrid to TODOS (all household push subs),
+ *    listing active familia_routines titles. Deduped via familia_routines_digest_sent/{YYYY-MM-DD}.
+ *
+ * Runs outside the browser (GitHub Actions cron / repository_dispatch). Mobile Web Push — not email.
  *
  * Required env (never commit):
  *   FIREBASE_SERVICE_ACCOUNT_JSON  — full service account JSON string
@@ -13,6 +17,8 @@
  *   VAPID_SUBJECT=mailto:you@example.com
  *   REMINDER_TZ=Europe/Madrid
  *   REMINDER_WINDOW_MINUTES=45   — primary window after remindAt; catch-up continues until event
+ *   ROUTINES_DIGEST_HOUR=16
+ *   ROUTINES_DIGEST_WINDOW_MINUTES=12  — fire if Madrid local time is in [16:00, 16:12)
  *   VAPID_KEYS_FILE=/path/to/secrets/vapid.json  (local fallback)
  */
 import { readFileSync, existsSync } from 'node:fs'
@@ -182,6 +188,183 @@ function assertTargeting(who, recipients) {
   return { ok: keys.length === 0 || (keys.length === 1 && keys[0] === who), keys }
 }
 
+/** Madrid (or REMINDER_TZ) calendar day YYYY-MM-DD + wall clock hour/minute. */
+function madridParts(ms, timeZone) {
+  const fmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  })
+  const p = Object.fromEntries(
+    fmt.formatToParts(new Date(ms)).filter((x) => x.type !== 'literal').map((x) => [x.type, x.value]),
+  )
+  return {
+    day: `${p.year}-${p.month}-${p.day}`,
+    hour: Number(p.hour),
+    minute: Number(p.minute),
+  }
+}
+
+function inRoutinesDigestWindow(ms, timeZone, hour, windowMinutes) {
+  const { day, hour: h, minute: m } = madridParts(ms, timeZone)
+  const mins = h * 60 + m
+  const start = hour * 60
+  const end = start + windowMinutes
+  return { ok: mins >= start && mins < end, day, hour: h, minute: m }
+}
+
+function truncateBody(text, maxLen = 180) {
+  const s = String(text || '').replace(/\s+/g, ' ').trim()
+  if (s.length <= maxLen) return s
+  return `${s.slice(0, maxLen - 1).trimEnd()}…`
+}
+
+/**
+ * ONE notification listing active routines for all household push devices.
+ * Marks familia_routines_digest_sent/{madridDay} so 5‑min cron ticks do not re-fire.
+ */
+async function sendRoutinesDigest({ db, webpush, subs, now, tz }) {
+  const hour = Number(process.env.ROUTINES_DIGEST_HOUR || 16)
+  const windowMinutes = Number(process.env.ROUTINES_DIGEST_WINDOW_MINUTES || 12)
+  const win = inRoutinesDigestWindow(now, tz, hour, windowMinutes)
+  if (!win.ok) {
+    return {
+      sent: 0,
+      skipped: true,
+      reason: 'outside_window',
+      madridDay: win.day,
+      madridClock: `${String(win.hour).padStart(2, '0')}:${String(win.minute).padStart(2, '0')}`,
+      window: `${hour}:00–${hour}:${String(windowMinutes).padStart(2, '0')}`,
+    }
+  }
+
+  const sentRef = db.collection('familia_routines_digest_sent').doc(win.day)
+  const already = await sentRef.get()
+  if (already.exists) {
+    return {
+      sent: 0,
+      skipped: true,
+      reason: 'already_sent_today',
+      madridDay: win.day,
+      madridClock: `${String(win.hour).padStart(2, '0')}:${String(win.minute).padStart(2, '0')}`,
+    }
+  }
+
+  const routinesSnap = await db.collection('familia_routines').get()
+  const active = routinesSnap.docs
+    .map((doc) => ({ id: doc.id, ...(doc.data() || {}) }))
+    .filter((r) => r.active !== false && String(r.title || '').trim())
+    .sort((a, b) => Number(a.createdAt || 0) - Number(b.createdAt || 0))
+
+  if (!active.length) {
+    // Mark day so empty board does not keep retrying every tick (optional: skip mark).
+    // Prefer retry if someone adds a routine later the same afternoon — do NOT mark.
+    return {
+      sent: 0,
+      skipped: true,
+      reason: 'no_active_routines',
+      madridDay: win.day,
+      madridClock: `${String(win.hour).padStart(2, '0')}:${String(win.minute).padStart(2, '0')}`,
+    }
+  }
+
+  const names = active.map((r) => {
+    const title = String(r.title).trim()
+    const cad = String(r.cadence || '')
+      .trim()
+      .toLowerCase()
+    if (cad === 'semanal' || cad === 'mensual') return `${title} (${cad})`
+    return title
+  })
+  const title = 'Familia · Rutinas de hoy'
+  const body = truncateBody(names.join(' · '))
+  const payload = JSON.stringify({
+    title,
+    body,
+    url: '/personal/familia/',
+    tag: `rutinas-digest-${win.day}`,
+  })
+
+  // TODOS: every household member with push enabled (one payload per device).
+  const targets = subs.filter((s) => s.memberKey && HOUSEHOLD.has(s.memberKey))
+  if (!targets.length) {
+    return {
+      sent: 0,
+      skipped: true,
+      reason: 'no_push_subs',
+      madridDay: win.day,
+      routineCount: active.length,
+    }
+  }
+
+  let okCount = 0
+  const errors = []
+  const deliveredTo = []
+  for (const s of targets) {
+    try {
+      await webpush.sendNotification(
+        {
+          endpoint: s.endpoint,
+          keys: { p256dh: s.keys.p256dh, auth: s.keys.auth },
+        },
+        payload,
+        { TTL: 60 * 60 * 12, urgency: 'normal' },
+      )
+      okCount++
+      deliveredTo.push(s.memberKey)
+    } catch (e) {
+      const status = e?.statusCode
+      errors.push({
+        uid: s.uid || s.id,
+        memberKey: s.memberKey,
+        status,
+        message: String(e?.message || e),
+      })
+      if (status === 404 || status === 410) {
+        await db.collection('familia_push_subs').doc(s.id).set({ enabled: false, dead: true }, { merge: true })
+      }
+    }
+  }
+
+  if (okCount === 0) {
+    return {
+      sent: 0,
+      skipped: true,
+      reason: 'all_devices_failed',
+      madridDay: win.day,
+      routineCount: active.length,
+      errors: errors.slice(0, 10),
+    }
+  }
+
+  await sentRef.set({
+    at: now,
+    madridDay: win.day,
+    recipients: okCount,
+    deliveredTo: [...new Set(deliveredTo)],
+    routineIds: active.map((r) => r.id),
+    titles: names,
+    title,
+    body,
+  })
+
+  return {
+    sent: okCount,
+    skipped: false,
+    reason: 'sent',
+    madridDay: win.day,
+    madridClock: `${String(win.hour).padStart(2, '0')}:${String(win.minute).padStart(2, '0')}`,
+    routineCount: active.length,
+    titles: names,
+    deliveredTo: [...new Set(deliveredTo)],
+    errors: errors.slice(0, 10),
+  }
+}
+
 /**
  * Fire when:
  * 1) Primary window: [remindAt, remindAt + windowMs) — ideal cron hit
@@ -299,22 +482,6 @@ async function main() {
         title: d.title,
       })
     }
-  }
-
-  if (!agenda.length) {
-    console.log(
-      JSON.stringify({
-        ok: true,
-        sent: 0,
-        checked: itemsSnap.size,
-        reason: 'no_upcoming_agenda',
-        nowMadrid: new Date(now).toLocaleString('es-ES', { timeZone: tz }),
-        tz,
-        windowMin,
-        skipDiag: skipDiag.slice(0, 30),
-      }),
-    )
-    return
   }
 
   const subsSnap = await db.collection('familia_push_subs').get()
@@ -518,16 +685,23 @@ async function main() {
     }
   }
 
+  const routinesDigest = await sendRoutinesDigest({ db, webpush, subs, now, tz })
+
   console.log(
     JSON.stringify({
       ok: true,
       sent,
       skipped,
+      agendaChecked: itemsSnap.size,
+      agendaDue: agenda.length,
+      agendaReason: agenda.length ? undefined : 'no_upcoming_agenda',
+      routinesDigest,
       activeSubs: subs.length,
       activeByMember,
       missingMembers: [...HOUSEHOLD].filter((m) => !activeByMember[m]),
       targeting: targetingLog.slice(0, 20),
       errors: errors.slice(0, 10),
+      skipDiag: agenda.length ? undefined : skipDiag.slice(0, 30),
       windowMin,
       tz,
       nowMadrid: new Date(now).toLocaleString('es-ES', { timeZone: tz }),

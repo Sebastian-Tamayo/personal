@@ -1,11 +1,14 @@
-# Closed-app mobile Web Push for Familia Hellen y Mati Agenda.
+# Closed-app mobile Web Push for Familia Hellen y Mati.
+# - Agenda citas/compromisos (lead time per profile)
+# - Rutinas digest once/day ~16:00 Europe/Madrid (familia_routines → todos)
 #
 # Schedules use UTC (GitHub does not support TZ in cron).
 # Europe/Madrid = UTC+1 (CET) / UTC+2 (CEST). Reminder math uses REMINDER_TZ.
-# Catch-up window (45 min) covers GitHub's common schedule delay under load.
+# Catch-up window covers GitHub's common schedule delay under load.
+# Production reliability: cron-job.org → repository_dispatch familia-agenda-remind (~5 min).
 #
 # Runs only from the default branch (main). Requires Actions enabled on the repo.
-# Idempotent via familia_reminders_sent — safe if primary + backup both fire.
+# Idempotent via familia_reminders_sent + familia_routines_digest_sent.
 name: Familia agenda push reminders
 
 on:
@@ -50,7 +53,7 @@ jobs:
         env:
           FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
         run: node scripts/migrate-teo-to-hellen.mjs
-      - name: Send due reminders
+      - name: Send due reminders (+ rutinas 16:00 digest)
         working-directory: familia-mati
         env:
           FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
@@ -59,4 +62,6 @@ jobs:
           VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT }}
           REMINDER_TZ: Europe/Madrid
           REMINDER_WINDOW_MINUTES: '60'
+          ROUTINES_DIGEST_HOUR: '16'
+          ROUTINES_DIGEST_WINDOW_MINUTES: '12'
         run: node scripts/send-agenda-reminders.mjs

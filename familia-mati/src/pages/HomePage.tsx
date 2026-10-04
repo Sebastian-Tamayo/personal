@@ -7,6 +7,7 @@ import {
   Home,
   Pencil,
   Plus,
+  Repeat,
   Trash2,
   X,
 } from 'lucide-react'
@@ -18,18 +19,23 @@ import {
   DAILY_TASK_SUGGESTIONS,
   FAMILY_MEMBERS,
   KIND_COLORS,
+  ROUTINE_SUGGESTIONS,
+  cadenceLabel,
   formatDateLabel,
   kindLabel,
   memberByKey,
   normalizeMemberKey,
   shiftISODate,
   todayISO,
+  type FamiliaRoutine,
   type ItemKind,
   type OrgItem,
   type PersonaKey,
+  type RoutineCadence,
 } from '../lib/family'
 import { useAuthStore } from '../store/authStore'
 import { useOrgStore } from '../store/orgStore'
+import { useRoutinesStore } from '../store/routinesStore'
 
 type AgendaTab = 'hoy' | 'proximos' | 'pasados'
 type ParaAssignee = 'sebas' | 'lore' | 'hellen' | 'todos'
@@ -78,7 +84,23 @@ export function HomePage() {
   const [agendaBusy, setAgendaBusy] = useState(false)
   const [agendaTab, setAgendaTab] = useState<AgendaTab>('hoy')
 
+  const routines = useRoutinesStore((s) => s.routines)
+  const routinesLoading = useRoutinesStore((s) => s.loading)
+  const routinesSyncError = useRoutinesStore((s) => s.syncError)
+  const subscribeRoutines = useRoutinesStore((s) => s.subscribe)
+  const addRoutine = useRoutinesStore((s) => s.addRoutine)
+  const updateRoutine = useRoutinesStore((s) => s.updateRoutine)
+  const deleteRoutine = useRoutinesStore((s) => s.deleteRoutine)
+
+  const [showRoutineForm, setShowRoutineForm] = useState(false)
+  const [routineTitle, setRoutineTitle] = useState('')
+  const [routineNotes, setRoutineNotes] = useState('')
+  const [routineCadence, setRoutineCadence] = useState<RoutineCadence>('semanal')
+  const [routineEditing, setRoutineEditing] = useState<FamiliaRoutine | null>(null)
+  const [routineBusy, setRoutineBusy] = useState(false)
+
   useEffect(() => subscribe(), [subscribe])
+  useEffect(() => subscribeRoutines(), [subscribeRoutines])
 
   useEffect(() => {
     const defaultPara: ParaAssignee = viewFilter === 'todos' ? myKey : viewFilter
@@ -129,6 +151,14 @@ export function HomePage() {
     setShowAgendaForm(false)
   }
 
+  function closeRoutineForm() {
+    setRoutineTitle('')
+    setRoutineNotes('')
+    setRoutineCadence('semanal')
+    setRoutineEditing(null)
+    setShowRoutineForm(false)
+  }
+
   function openNewDaily() {
     setDailyEditing(null)
     setDailyTitle('')
@@ -137,6 +167,8 @@ export function HomePage() {
     setDailyDate(todayISO())
     setShowDailyForm(true)
     setShowAgendaForm(false)
+    setShowRoutineForm(false)
+    setRoutineEditing(null)
   }
 
   function openNewAgenda() {
@@ -149,6 +181,20 @@ export function HomePage() {
     setAgendaTime('')
     setShowAgendaForm(true)
     setShowDailyForm(false)
+    setShowRoutineForm(false)
+    setRoutineEditing(null)
+  }
+
+  function openNewRoutine() {
+    setRoutineEditing(null)
+    setRoutineTitle('')
+    setRoutineNotes('')
+    setRoutineCadence('semanal')
+    setShowRoutineForm(true)
+    setShowDailyForm(false)
+    setShowAgendaForm(false)
+    setDailyEditing(null)
+    setAgendaEditing(null)
   }
 
   async function onSubmitDaily(e: FormEvent) {
@@ -241,6 +287,34 @@ export function HomePage() {
     }
   }
 
+  async function onSubmitRoutine(e: FormEvent) {
+    e.preventDefault()
+    if (!routineTitle.trim()) return
+    setRoutineBusy(true)
+    try {
+      if (routineEditing) {
+        await updateRoutine(routineEditing.id, {
+          title: routineTitle,
+          notes: routineNotes,
+          cadence: routineCadence,
+          active: true,
+        })
+      } else {
+        await addRoutine(
+          {
+            title: routineTitle,
+            notes: routineNotes,
+            cadence: routineCadence,
+          },
+          user.uid,
+        )
+      }
+      closeRoutineForm()
+    } finally {
+      setRoutineBusy(false)
+    }
+  }
+
   function startEditDaily(item: OrgItem) {
     setDailyEditing(item)
     setDailyTitle(item.title)
@@ -253,6 +327,8 @@ export function HomePage() {
     setDailyDate(item.date || todayISO())
     setShowDailyForm(true)
     setShowAgendaForm(false)
+    setShowRoutineForm(false)
+    setRoutineEditing(null)
   }
 
   function startEditAgenda(item: OrgItem) {
@@ -269,10 +345,25 @@ export function HomePage() {
     setAgendaTime(item.time)
     setShowAgendaForm(true)
     setShowDailyForm(false)
+    setShowRoutineForm(false)
+    setRoutineEditing(null)
+  }
+
+  function startEditRoutine(item: FamiliaRoutine) {
+    setRoutineEditing(item)
+    setRoutineTitle(item.title)
+    setRoutineNotes(item.notes)
+    setRoutineCadence(item.cadence || 'semanal')
+    setShowRoutineForm(true)
+    setShowDailyForm(false)
+    setShowAgendaForm(false)
+    setDailyEditing(null)
+    setAgendaEditing(null)
   }
 
   const dailyFormOpen = showDailyForm || !!dailyEditing
   const agendaFormOpen = showAgendaForm || !!agendaEditing
+  const routineFormOpen = showRoutineForm || !!routineEditing
 
   return (
     <AppShell>
@@ -305,31 +396,40 @@ export function HomePage() {
         <Capybara variant="peek" className="h-10 w-auto" title="" />
       </div>
 
-      {syncError ? (
+      {syncError || routinesSyncError ? (
         <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-800" role="alert">
-          {syncError}
+          {syncError || routinesSyncError}
         </p>
       ) : null}
 
       <PushOptIn />
 
-      <section className="animate-rise grid grid-cols-2 gap-2">
+      <section className="animate-rise grid grid-cols-3 gap-2">
         <button
           type="button"
           onClick={openNewDaily}
-          className="inline-flex items-center justify-center gap-1.5 rounded-2xl border-2 border-[#ca8a04]/50 bg-gradient-to-br from-[#fef9c3] to-[#fde68a] px-3 py-3 text-sm font-extrabold text-[#854d0e] shadow-sm"
+          className="inline-flex items-center justify-center gap-1.5 rounded-2xl border-2 border-[#ca8a04]/50 bg-gradient-to-br from-[#fef9c3] to-[#fde68a] px-2 py-3 text-xs font-extrabold text-[#854d0e] shadow-sm sm:text-sm"
           data-testid="btn-nueva-tarea"
         >
-          <Plus className="size-4" aria-hidden />
+          <Plus className="size-4 shrink-0" aria-hidden />
           Nueva tarea
         </button>
         <button
           type="button"
+          onClick={openNewRoutine}
+          className="inline-flex items-center justify-center gap-1.5 rounded-2xl border-2 border-[#0369a1]/40 bg-gradient-to-br from-[#e0f2fe] to-[#bae6fd] px-2 py-3 text-xs font-extrabold text-[#075985] shadow-sm sm:text-sm"
+          data-testid="btn-nueva-rutina"
+        >
+          <Plus className="size-4 shrink-0" aria-hidden />
+          Nueva rutina
+        </button>
+        <button
+          type="button"
           onClick={openNewAgenda}
-          className="inline-flex items-center justify-center gap-1.5 rounded-2xl border-2 border-[#0f766e]/40 bg-gradient-to-br from-[#f0fdfa] to-[#ccfbf1] px-3 py-3 text-sm font-extrabold text-[#0f766e] shadow-sm"
+          className="inline-flex items-center justify-center gap-1.5 rounded-2xl border-2 border-[#0f766e]/40 bg-gradient-to-br from-[#f0fdfa] to-[#ccfbf1] px-2 py-3 text-xs font-extrabold text-[#0f766e] shadow-sm sm:text-sm"
           data-testid="btn-nueva-cita"
         >
-          <Plus className="size-4" aria-hidden />
+          <Plus className="size-4 shrink-0" aria-hidden />
           Nueva cita
         </button>
       </section>
@@ -457,6 +557,161 @@ export function HomePage() {
                   }}
                 />
               ))}
+            </ul>
+          )}
+        </div>
+      </section>
+
+      {/* ========== RUTINAS (semanales / mensuales — no son tareas ni citas) ========== */}
+      <section
+        className="overflow-hidden rounded-3xl border-2 border-[#0369a1]/35 bg-gradient-to-br from-[#e0f2fe] via-[#bae6fd]/60 to-[#7dd3fc]/30 shadow-[var(--shadow)]"
+        data-testid="section-rutinas"
+      >
+        <div className="border-b border-[#0369a1]/25 bg-[#0369a1]/12 px-4 py-3">
+          <h2 className="flex items-center gap-2 text-lg font-extrabold text-[#075985]">
+            <Repeat className="size-5" aria-hidden />
+            Rutinas semanales / mensuales
+          </h2>
+          <p className="mt-0.5 text-xs font-semibold text-[#0369a1]">
+            Recordatorio único a las 16:00 · visibles para todos
+          </p>
+        </div>
+
+        <div className="space-y-3 p-4">
+          {routineFormOpen ? (
+            <form
+              className="grid gap-2 rounded-2xl border border-[#0369a1]/25 bg-white/90 p-3"
+              onSubmit={onSubmitRoutine}
+              data-testid="form-nueva-rutina"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-extrabold text-[#075985]">
+                  {routineEditing ? 'Editar rutina' : 'Nueva rutina'}
+                </p>
+                <button
+                  type="button"
+                  onClick={closeRoutineForm}
+                  className="rounded-lg border border-[var(--line)] bg-white p-1.5"
+                  aria-label="Cerrar"
+                >
+                  <X className="size-4" />
+                </button>
+              </div>
+              {!routineEditing ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {ROUTINE_SUGGESTIONS.map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      disabled={routineBusy}
+                      onClick={() => setRoutineTitle(s)}
+                      className="rounded-full border border-[#0369a1]/40 bg-white/85 px-2.5 py-1 text-xs font-bold text-[#075985] disabled:opacity-50"
+                    >
+                      + {s}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+              <input
+                required
+                autoFocus
+                value={routineTitle}
+                onChange={(e) => setRoutineTitle(e.target.value)}
+                placeholder="Ej. Revisar nevera · Pagar luz"
+                className="rounded-xl border border-[var(--line)] bg-white px-3 py-2.5 outline-none ring-[#0369a1] focus:ring-2"
+              />
+              <label className="text-sm">
+                <span className="mb-1 block font-bold text-[var(--ink-soft)]">Cadencia</span>
+                <select
+                  value={routineCadence}
+                  onChange={(e) => setRoutineCadence(e.target.value as RoutineCadence)}
+                  className="w-full rounded-xl border border-[var(--line)] bg-white px-3 py-2.5"
+                  data-testid="routine-cadence"
+                >
+                  <option value="semanal">Semanal</option>
+                  <option value="mensual">Mensual</option>
+                  <option value="">Sin etiqueta</option>
+                </select>
+              </label>
+              <textarea
+                value={routineNotes}
+                onChange={(e) => setRoutineNotes(e.target.value)}
+                placeholder="Notas (opcional)"
+                rows={2}
+                className="resize-none rounded-xl border border-[var(--line)] bg-white px-3 py-2.5 outline-none ring-[#0369a1] focus:ring-2"
+              />
+              <button
+                type="submit"
+                disabled={routineBusy}
+                className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#0369a1] px-3 py-2.5 text-sm font-extrabold text-white disabled:opacity-60"
+              >
+                {routineEditing ? <Pencil className="size-4" /> : <Plus className="size-4" />}
+                {routineEditing ? 'Guardar' : 'Añadir rutina'}
+              </button>
+            </form>
+          ) : null}
+
+          {routinesLoading ? (
+            <p className="text-sm text-[var(--ink-soft)]">Cargando…</p>
+          ) : routines.length === 0 ? (
+            <EmptyCapybara
+              variant="leaf"
+              accent="teal"
+              message={
+                <>
+                  Sin rutinas aún. Pulsa <span className="font-extrabold">Nueva rutina</span>.
+                </>
+              }
+            />
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {routines.map((item) => {
+                const cad = cadenceLabel(item.cadence)
+                return (
+                  <li
+                    key={item.id}
+                    className="flex items-start gap-2 rounded-xl border border-[#7dd3fc]/60 bg-white/85 px-3 py-3 shadow-sm"
+                    style={{ borderLeft: '4px solid #0369a1' }}
+                    data-testid="routine-row"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <p className="font-bold text-[#075985]">{item.title}</p>
+                        {cad ? (
+                          <span className="rounded-full bg-[#e0f2fe] px-2 py-0.5 text-[10px] font-extrabold uppercase text-[#0369a1]">
+                            {cad}
+                          </span>
+                        ) : null}
+                      </div>
+                      {item.notes ? (
+                        <p className="mt-0.5 text-sm text-[var(--ink-soft)]">{item.notes}</p>
+                      ) : null}
+                    </div>
+                    <div className="flex gap-1">
+                      <button
+                        type="button"
+                        onClick={() => startEditRoutine(item)}
+                        className="rounded-lg border border-[var(--line)] bg-white/80 p-2"
+                        aria-label={`Editar ${item.title}`}
+                      >
+                        <Pencil className="size-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (confirm(`¿Eliminar rutina «${item.title}»?`)) {
+                            void deleteRoutine(item.id)
+                          }
+                        }}
+                        className="rounded-lg border border-[var(--line)] bg-white/80 p-2 text-red-700"
+                        aria-label={`Eliminar ${item.title}`}
+                      >
+                        <Trash2 className="size-4" />
+                      </button>
+                    </div>
+                  </li>
+                )
+              })}
             </ul>
           )}
         </div>

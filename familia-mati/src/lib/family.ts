@@ -117,6 +117,29 @@ export interface OrgItem {
   createdBy: string
 }
 
+/** Weekly / monthly household routines — separate from chores and agenda citas. */
+export type RoutineCadence = 'semanal' | 'mensual' | ''
+
+export interface FamiliaRoutine {
+  id: string
+  title: string
+  notes: string
+  /** Optional cadence label shown in UI (semanal / mensual). */
+  cadence: RoutineCadence
+  /** Inactive routines stay in Firestore but are hidden from board + 16:00 digest. */
+  active: boolean
+  createdAt: number
+  updatedAt: number
+  createdBy: string
+}
+
+export function cadenceLabel(cadence: RoutineCadence | string | null | undefined): string {
+  const c = String(cadence || '').trim().toLowerCase()
+  if (c === 'semanal') return 'Semanal'
+  if (c === 'mensual') return 'Mensual'
+  return ''
+}
+
 /** Presets for “Avisar con antelación” (minutes before event). Default 2 h. Profile-wide, not per cita. */
 export const REMINDER_LEAD_PRESETS = [
   { minutes: 30, label: '30 min' },
@@ -268,4 +291,13 @@ export const DAILY_TASK_SUGGESTIONS = [
   'Hacer deberes',
   'Entregar bebé',
   'Recoger bebé',
+] as const
+
+/** Sugerencias ligeras para rutinas semanales / mensuales. */
+export const ROUTINE_SUGGESTIONS = [
+  'Revisar nevera',
+  'Pagar facturas',
+  'Lavar ropa de cama',
+  'Comprar del súper',
+  'Revisar agenda escolar',
 ] as const
