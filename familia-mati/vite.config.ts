@@ -4,9 +4,9 @@ import { defineConfig, type Plugin } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
 // Nested under GitHub Pages: https://sebastian-tamayo.github.io/personal/familia/
-// Cache-bust bump: family photo empty states + compact Nueva
-export const FAMILIA_BUILD_ID = 'empty-family-v20261004l'
-export const FAMILIA_PWA_CACHE_ID = 'familia-hellen-mati-v20261004l'
+// Cache-bust bump: family photo PWA home-screen icon
+export const FAMILIA_BUILD_ID = 'pwa-family-icon-v20261004m'
+export const FAMILIA_PWA_CACHE_ID = 'familia-hellen-mati-v20261004m'
 
 function familiaVersionJson(): Plugin {
   return {
@@ -31,7 +31,8 @@ export default defineConfig({
       // Prompt so clients see Actualizar instead of silent swap
       registerType: 'prompt',
       includeAssets: [
-        'favicon.svg',
+        'icons/favicon-32.png',
+        'icons/favicon-64.png',
         'icons/apple-touch-icon.png',
         'icons/pwa-192.png',
         'icons/pwa-512.png',
@@ -49,7 +50,7 @@ export default defineConfig({
         display: 'standalone',
         orientation: 'portrait-primary',
         lang: 'es',
-        start_url: '/personal/familia/?v=20261004l',
+        start_url: '/personal/familia/?v=20261004m',
         scope: '/personal/familia/',
         icons: [
           { src: 'icons/pwa-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
