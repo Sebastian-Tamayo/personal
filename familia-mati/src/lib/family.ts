@@ -162,7 +162,7 @@ export function normalizeDigestTime(raw: unknown): string {
   return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`
 }
 
-/** Presets for “Avisar con antelación” (minutes before event). Default 2 h. Profile-wide, not per cita. */
+/** Presets for per-item “Aviso con antelación” (tarea/cita forms). Default 2 h; profile seeds new forms. */
 export const REMINDER_LEAD_PRESETS = [
   { minutes: 30, label: '30 min' },
   { minutes: 60, label: '1 h' },

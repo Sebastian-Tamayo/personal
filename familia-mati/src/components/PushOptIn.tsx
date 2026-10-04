@@ -1,10 +1,5 @@
-import { Bell, BellRing, Clock3, X } from 'lucide-react'
+import { Bell, BellRing, X } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
-import {
-  DEFAULT_REMINDER_LEAD_MINUTES,
-  REMINDER_LEAD_PRESETS,
-  normalizeReminderLeadMinutes,
-} from '../lib/family'
 import {
   dismissPushPromptSession,
   enablePushNotifications,
@@ -20,17 +15,15 @@ import {
 import { useAuthStore } from '../store/authStore'
 
 /**
- * Per active persona (Sebas / Lore / Hellen). Lead is profile-wide — not per cita.
+ * Opt-in for Web Push only. Lead time is chosen in Tarea/Cita create/edit forms
+ * (per-item reminderLeadMinutes) — not on the home board.
  */
 export function PushOptIn() {
   const user = useAuthStore((s) => s.user)
   const profile = useAuthStore((s) => s.profile)
-  const updateReminderLeadMinutes = useAuthStore((s) => s.updateReminderLeadMinutes)
   const [status, setStatus] = useState<PushStatus | 'loading'>('loading')
   const [busy, setBusy] = useState(false)
-  const [leadBusy, setLeadBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [leadError, setLeadError] = useState<string | null>(null)
   const [sessionHidden, setSessionHidden] = useState(false)
   const [ready, setReady] = useState(false)
 
@@ -48,9 +41,6 @@ export function PushOptIn() {
       isThisUserPushActive(uid, memberKey),
     ])
     setStatus(active ? 'subscribed' : s)
-    if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('familia-shot-lead') === '1') {
-      setStatus('subscribed')
-    }
     setSessionHidden(isPushPromptSessionDismissed(uid, memberKey))
     setReady(true)
   }, [uid, memberKey])
@@ -62,9 +52,10 @@ export function PushOptIn() {
 
   if (!user || !profile || !ready) return null
 
-  const leadMinutes = normalizeReminderLeadMinutes(
-    profile.reminderLeadMinutes ?? DEFAULT_REMINDER_LEAD_MINUTES,
-  )
+  // Already enabled — no home lead editor (antelación lives in Tarea/Cita forms).
+  if (status === 'subscribed') return null
+
+  if (sessionHidden) return null
 
   async function onEnable() {
     setBusy(true)
@@ -84,67 +75,6 @@ export function PushOptIn() {
     dismissPushPromptSession(user!.uid, profile!.memberKey)
     setSessionHidden(true)
   }
-
-  async function onLeadChange(minutes: number) {
-    const next = normalizeReminderLeadMinutes(minutes)
-    if (next === leadMinutes) return
-    setLeadBusy(true)
-    setLeadError(null)
-    try {
-      await updateReminderLeadMinutes(next)
-    } catch (e) {
-      setLeadError(e instanceof Error ? e.message : 'No se pudo guardar.')
-    } finally {
-      setLeadBusy(false)
-    }
-  }
-
-  if (status === 'subscribed') {
-    return (
-      <section
-        className="rounded-2xl border border-[#7dd3fc] bg-gradient-to-br from-[#f0f9ff] to-[#e0f2fe]/80 px-3 py-2.5 shadow-[var(--shadow)]"
-        data-testid="avisos-lead-settings"
-        data-avisos-user={profile.memberKey}
-      >
-        <h2 className="mb-1.5 flex items-center gap-1.5 text-sm font-extrabold text-[#0369a1]">
-          <Clock3 className="size-4 shrink-0" aria-hidden />
-          Elegimos el tiempo del aviso
-        </h2>
-        <p className="mb-1.5 text-[11px] font-semibold leading-snug text-[#0369a1]/90">
-          Misma antelación para citas y para tareas diarias con hora
-        </p>
-        <div className="flex flex-wrap gap-1.5" role="group" aria-label="Antelación del aviso">
-          {REMINDER_LEAD_PRESETS.map((p) => {
-            const selected = p.minutes === leadMinutes
-            return (
-              <button
-                key={p.minutes}
-                type="button"
-                disabled={leadBusy}
-                onClick={() => void onLeadChange(p.minutes)}
-                className={
-                  selected
-                    ? 'rounded-full bg-[#0284c7] px-2.5 py-1 text-xs font-extrabold text-white shadow-sm disabled:opacity-60'
-                    : 'rounded-full border border-[#7dd3fc] bg-white/90 px-2.5 py-1 text-xs font-bold text-[#0369a1] hover:bg-[#e0f2fe] disabled:opacity-60'
-                }
-                aria-pressed={selected}
-                data-testid={`lead-preset-${p.minutes}`}
-              >
-                {p.label}
-              </button>
-            )
-          })}
-        </div>
-        {leadError ? (
-          <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900" role="alert">
-            {leadError}
-          </p>
-        ) : null}
-      </section>
-    )
-  }
-
-  if (sessionHidden) return null
 
   const unsupported = status === 'unsupported' || status === 'missing-vapid'
   const iosNeedsHomeScreen = isLikelyIos() && !isStandaloneDisplay()
@@ -170,9 +100,8 @@ export function PushOptIn() {
         Activar avisos
       </h2>
       <p className="mb-2 text-sm font-semibold text-[#0c4a6e]">
-        Avisos al móvil para la <span className="font-extrabold">agenda</span> y para{' '}
-        <span className="font-extrabold">tareas diarias con hora</span>. Lore y Hellen aprueban por
-        separado.
+        Activa los avisos al móvil. La antelación (30 min / 1 h / …) la eliges al crear cada{' '}
+        <span className="font-extrabold">tarea</span> o <span className="font-extrabold">cita</span>.
       </p>
       {iosNeedsHomeScreen ? (
         <p
@@ -186,15 +115,14 @@ export function PushOptIn() {
       <ul className="mb-3 list-disc space-y-1 pl-4 text-xs font-semibold text-[#0c4a6e]/90">
         <li>
           <span className="font-extrabold">Citas</span> y{' '}
-          <span className="font-extrabold">tareas con fecha y hora</span> — misma antelación (30 min /
-          1 h / 2 h / 3 h / 1 día). Sin hora en la tarea, no hay push.
+          <span className="font-extrabold">tareas con hora</span> — antelación en el formulario de
+          cada una. Sin hora en la tarea, no hay push.
         </li>
         <li>Mismo correo de Lore → dos perfiles; cada uno confirma avisos por su lado.</li>
         <li>
           Funciona con la app <span className="font-extrabold">cerrada</span> (PWA en el inicio).
         </li>
         <li>Solo te llegan los avisos asignados a ti (o a Todos).</li>
-        <li>Al dar OK, el aviso desaparece solo para este perfil.</li>
       </ul>
       <p className="mb-3 text-[11px] leading-snug text-[#0c4a6e]/75">
         iPhone: iOS 16.4+ e icono en pantalla de inicio. Android: Chrome → Instalar / Añadir a inicio.
