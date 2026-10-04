@@ -1,7 +1,7 @@
 {
   "name": "familia-mati",
   "private": true,
-  "version": "1.0.13-nueva-compact",
+  "version": "1.0.14-capybara-empty",
   "type": "module",
   "scripts": {
     "dev": "vite",

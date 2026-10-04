@@ -13,7 +13,7 @@ import {
 } from 'lucide-react'
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { AppShell } from '../components/AppShell'
-import { Capybara, EmptyCapybara } from '../components/Capybara'
+import { EmptyCapybara } from '../components/Capybara'
 import { PushOptIn } from '../components/PushOptIn'
 import {
   DAILY_TASK_SUGGESTIONS,
@@ -438,11 +438,6 @@ export function HomePage() {
           />
         ))}
       </section>
-
-      {/* Decorative capybara in the chip/actions gap */}
-      <div className="pointer-events-none flex justify-end pr-1 opacity-80" aria-hidden>
-        <Capybara variant="peek" className="h-10 w-auto" title="" />
-      </div>
 
       {syncError || routinesSyncError ? (
         <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-800" role="alert">

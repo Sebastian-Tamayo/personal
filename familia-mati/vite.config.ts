@@ -4,9 +4,9 @@ import { defineConfig, type Plugin } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
 // Nested under GitHub Pages: https://sebastian-tamayo.github.io/personal/familia/
-// Cache-bust bump: compact single-line Nueva buttons
-export const FAMILIA_BUILD_ID = 'nueva-compact-v20261004j'
-export const FAMILIA_PWA_CACHE_ID = 'familia-hellen-mati-v20261004j'
+// Cache-bust bump: capybaras only in empty section boxes + compact Nueva
+export const FAMILIA_BUILD_ID = 'capybara-empty-v20261004k'
+export const FAMILIA_PWA_CACHE_ID = 'familia-hellen-mati-v20261004k'
 
 function familiaVersionJson(): Plugin {
   return {
@@ -46,7 +46,7 @@ export default defineConfig({
         display: 'standalone',
         orientation: 'portrait-primary',
         lang: 'es',
-        start_url: '/personal/familia/?v=20261004j',
+        start_url: '/personal/familia/?v=20261004k',
         scope: '/personal/familia/',
         icons: [
           { src: 'icons/pwa-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
