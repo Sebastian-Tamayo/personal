@@ -582,14 +582,22 @@ async function main() {
     const targets = recipientsForItem(item, subs)
     const targetingCheck = assertTargeting(who, targets)
 
+    // Prefer lead stored on the item (task/cita chip); else each recipient’s profile lead.
+    const itemLeadRaw = item.reminderLeadMinutes
+    const itemLead =
+      itemLeadRaw != null && itemLeadRaw !== ''
+        ? normalizeLeadMinutes(itemLeadRaw)
+        : null
+
     const dueTargets = []
     const skipReasons = []
     for (const t of targets) {
-      const decision = shouldRemind(now, item.eventAt, t.leadMinutes, windowMs)
+      const leadMinutes = itemLead != null ? itemLead : t.leadMinutes
+      const decision = shouldRemind(now, item.eventAt, leadMinutes, windowMs)
       if (decision.ok) {
-        dueTargets.push({ ...t, remindReason: decision.reason })
+        dueTargets.push({ ...t, leadMinutes, remindReason: decision.reason })
       } else {
-        skipReasons.push({ memberKey: t.memberKey, reason: decision.reason })
+        skipReasons.push({ memberKey: t.memberKey, reason: decision.reason, leadMinutes })
       }
     }
 

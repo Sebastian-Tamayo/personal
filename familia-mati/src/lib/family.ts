@@ -112,6 +112,11 @@ export interface OrgItem {
   assignee: MemberKey | 'todos'
   date: string
   time: string
+  /**
+   * Lead minutes for push when `time` is set (same presets as citas).
+   * Absent/0 → cron falls back to each recipient’s profile lead; UI hides “Aviso · …”.
+   */
+  reminderLeadMinutes?: number
   createdAt: number
   updatedAt: number
   createdBy: string

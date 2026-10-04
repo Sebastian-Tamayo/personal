@@ -17,13 +17,17 @@ import { Capybara, EmptyCapybara } from '../components/Capybara'
 import { PushOptIn } from '../components/PushOptIn'
 import {
   DAILY_TASK_SUGGESTIONS,
+  DEFAULT_REMINDER_LEAD_MINUTES,
   FAMILY_MEMBERS,
   KIND_COLORS,
+  REMINDER_LEAD_PRESETS,
   ROUTINE_SUGGESTIONS,
   cadenceLabel,
+  formatLeadLabel,
   formatDateLabel,
   kindLabel,
   memberByKey,
+  normalizeReminderLeadMinutes,
   shiftISODate,
   todayISO,
   type FamiliaRoutine,
@@ -49,6 +53,10 @@ function defaultParaForFilter(filter: ViewFilter): ParaAssignee {
 
 export function HomePage() {
   const user = useAuthStore((s) => s.user)!
+  const profile = useAuthStore((s) => s.profile)
+  const profileLead = normalizeReminderLeadMinutes(
+    profile?.reminderLeadMinutes ?? DEFAULT_REMINDER_LEAD_MINUTES,
+  )
   const items = useOrgStore((s) => s.items)
   const loading = useOrgStore((s) => s.loading)
   const syncError = useOrgStore((s) => s.syncError)
@@ -65,8 +73,9 @@ export function HomePage() {
   const [dailyNotes, setDailyNotes] = useState('')
   const [dailyAssignee, setDailyAssignee] = useState<ParaAssignee>('todos')
   const [dailyDate, setDailyDate] = useState(todayISO())
-  /** Optional clock — with time, cron uses the same per-profile lead presets as citas. */
+  /** Optional clock — with time + lead, cron sends push (same presets as citas). */
   const [dailyTime, setDailyTime] = useState('')
+  const [dailyLead, setDailyLead] = useState(DEFAULT_REMINDER_LEAD_MINUTES)
   const [dailyEditing, setDailyEditing] = useState<OrgItem | null>(null)
   const [dailyBusy, setDailyBusy] = useState(false)
 
@@ -77,9 +86,15 @@ export function HomePage() {
   const [agendaAssignee, setAgendaAssignee] = useState<ParaAssignee>('todos')
   const [agendaDate, setAgendaDate] = useState(todayISO())
   const [agendaTime, setAgendaTime] = useState('')
+  const [agendaLead, setAgendaLead] = useState(DEFAULT_REMINDER_LEAD_MINUTES)
   const [agendaEditing, setAgendaEditing] = useState<OrgItem | null>(null)
   const [agendaBusy, setAgendaBusy] = useState(false)
   const [agendaTab, setAgendaTab] = useState<AgendaTab>('hoy')
+
+  useEffect(() => {
+    if (!dailyEditing) setDailyLead(profileLead)
+    if (!agendaEditing) setAgendaLead(profileLead)
+  }, [profileLead, dailyEditing, agendaEditing])
 
   const routines = useRoutinesStore((s) => s.routines)
   const digestTime = useRoutinesStore((s) => s.digestTime)
@@ -137,6 +152,7 @@ export function HomePage() {
     setDailyAssignee(defaultParaForFilter(viewFilter))
     setDailyDate(todayISO())
     setDailyTime('')
+    setDailyLead(profileLead)
     setDailyEditing(null)
     setShowDailyForm(false)
   }
@@ -148,6 +164,7 @@ export function HomePage() {
     setAgendaAssignee(defaultParaForFilter(viewFilter))
     setAgendaDate(todayISO())
     setAgendaTime('')
+    setAgendaLead(profileLead)
     setAgendaEditing(null)
     setShowAgendaForm(false)
   }
@@ -167,6 +184,7 @@ export function HomePage() {
     setDailyAssignee(defaultParaForFilter(viewFilter))
     setDailyDate(todayISO())
     setDailyTime('')
+    setDailyLead(profileLead)
     setShowDailyForm(true)
     setShowAgendaForm(false)
     setShowRoutineForm(false)
@@ -181,6 +199,7 @@ export function HomePage() {
     setAgendaAssignee(defaultParaForFilter(viewFilter))
     setAgendaDate(todayISO())
     setAgendaTime('')
+    setAgendaLead(profileLead)
     setShowAgendaForm(true)
     setShowDailyForm(false)
     setShowRoutineForm(false)
@@ -205,6 +224,7 @@ export function HomePage() {
     setDailyBusy(true)
     try {
       const date = dailyDate || todayISO()
+      const lead = dailyTime ? normalizeReminderLeadMinutes(dailyLead) : null
       if (dailyEditing) {
         await updateItem(dailyEditing.id, {
           title: dailyTitle,
@@ -213,6 +233,7 @@ export function HomePage() {
           assignee: dailyAssignee,
           date,
           time: dailyTime,
+          reminderLeadMinutes: lead,
           status: dailyEditing.status,
         })
       } else {
@@ -224,6 +245,7 @@ export function HomePage() {
             assignee: dailyAssignee,
             date,
             time: dailyTime,
+            reminderLeadMinutes: lead,
           },
           user.uid,
         )
@@ -263,13 +285,15 @@ export function HomePage() {
     try {
       if (agendaEditing) {
         // Time is immutable after create — changing it would skip a fresh push aviso.
+        const time = agendaEditing.time
         await updateItem(agendaEditing.id, {
           title: agendaTitle,
           notes: agendaNotes,
           kind: agendaKind,
           assignee: agendaAssignee,
           date: agendaDate,
-          time: agendaEditing.time,
+          time,
+          reminderLeadMinutes: time ? normalizeReminderLeadMinutes(agendaLead) : null,
           status: agendaEditing.status,
         })
       } else {
@@ -281,6 +305,9 @@ export function HomePage() {
             assignee: agendaAssignee,
             date: agendaDate || todayISO(),
             time: agendaTime,
+            reminderLeadMinutes: agendaTime
+              ? normalizeReminderLeadMinutes(agendaLead)
+              : null,
           },
           user.uid,
         )
@@ -330,6 +357,9 @@ export function HomePage() {
     )
     setDailyDate(item.date || todayISO())
     setDailyTime(item.time || '')
+    setDailyLead(
+      normalizeReminderLeadMinutes(item.reminderLeadMinutes ?? profileLead),
+    )
     setShowDailyForm(true)
     setShowAgendaForm(false)
     setShowRoutineForm(false)
@@ -348,6 +378,9 @@ export function HomePage() {
     )
     setAgendaDate(item.date || todayISO())
     setAgendaTime(item.time)
+    setAgendaLead(
+      normalizeReminderLeadMinutes(item.reminderLeadMinutes ?? profileLead),
+    )
     setShowAgendaForm(true)
     setShowDailyForm(false)
     setShowRoutineForm(false)
@@ -536,10 +569,36 @@ export function HomePage() {
                   data-testid="daily-time-input"
                 />
                 <p className="mt-1 text-[11px] font-semibold leading-snug text-[#a16207]">
-                  Con hora, el aviso usa la misma antelación que las citas (30 min / 1 h / 2 h / 3 h /
-                  1 día). Sin hora, no hay push.
+                  Sin hora no hay push. Con hora, elige la antelación (misma lista que citas).
                 </p>
               </label>
+              {dailyTime ? (
+                <div data-testid="daily-lead-presets">
+                  <span className="mb-1 block text-sm font-bold text-[var(--ink-soft)]">
+                    Aviso con antelación
+                  </span>
+                  <div className="flex flex-wrap gap-1.5" role="group" aria-label="Antelación de la tarea">
+                    {REMINDER_LEAD_PRESETS.map((p) => {
+                      const selected = p.minutes === normalizeReminderLeadMinutes(dailyLead)
+                      return (
+                        <button
+                          key={p.minutes}
+                          type="button"
+                          onClick={() => setDailyLead(p.minutes)}
+                          className={
+                            selected
+                              ? 'rounded-full bg-[#ca8a04] px-2.5 py-1 text-xs font-extrabold text-white'
+                              : 'rounded-full border border-[#ca8a04]/50 bg-white/90 px-2.5 py-1 text-xs font-bold text-[#854d0e]'
+                          }
+                          aria-pressed={selected}
+                        >
+                          {p.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              ) : null}
               <button
                 type="submit"
                 disabled={dailyBusy}
@@ -896,6 +955,33 @@ export function HomePage() {
                   />
                 </label>
               )}
+              {(agendaEditing?.time || agendaTime) ? (
+                <div data-testid="agenda-lead-presets">
+                  <span className="mb-1 block text-sm font-bold text-[var(--ink-soft)]">
+                    Aviso con antelación
+                  </span>
+                  <div className="flex flex-wrap gap-1.5" role="group" aria-label="Antelación de la cita">
+                    {REMINDER_LEAD_PRESETS.map((p) => {
+                      const selected = p.minutes === normalizeReminderLeadMinutes(agendaLead)
+                      return (
+                        <button
+                          key={p.minutes}
+                          type="button"
+                          onClick={() => setAgendaLead(p.minutes)}
+                          className={
+                            selected
+                              ? 'rounded-full bg-[#0f766e] px-2.5 py-1 text-xs font-extrabold text-white'
+                              : 'rounded-full border border-[#0f766e]/40 bg-white/90 px-2.5 py-1 text-xs font-bold text-[#0f766e]'
+                          }
+                          aria-pressed={selected}
+                        >
+                          {p.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              ) : null}
               <button
                 type="submit"
                 disabled={agendaBusy}
@@ -1122,6 +1208,18 @@ function ItemRow({
               `${who.emoji} ${who.name}`
             )}
           </span>
+          {item.time && item.reminderLeadMinutes != null ? (
+            <span
+              className="inline-flex items-center gap-1 rounded-full bg-[#e0f2fe] px-2.5 py-1 text-xs font-extrabold text-[#0369a1] ring-1 ring-[#7dd3fc]/60"
+              data-testid="lead-label"
+              data-lead-minutes={item.reminderLeadMinutes}
+              title="Antelación del aviso"
+            >
+              <span className="opacity-80">Aviso</span>
+              <span>·</span>
+              <span>{formatLeadLabel(item.reminderLeadMinutes)}</span>
+            </span>
+          ) : null}
         </div>
         {item.notes ? (
           <p className="mt-0.5 whitespace-pre-wrap break-words text-sm text-[var(--ink-soft)]">

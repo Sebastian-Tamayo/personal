@@ -4,9 +4,9 @@ import { defineConfig, type Plugin } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
 // Nested under GitHub Pages: https://sebastian-tamayo.github.io/personal/familia/
-// Cache-bust bump: task lead times + warmer audible avisos
-export const FAMILIA_BUILD_ID = 'tarea-lead-v20261004f'
-export const FAMILIA_PWA_CACHE_ID = 'familia-hellen-mati-v20261004f'
+// Cache-bust bump: visible Aviso · lead badge on timed tasks/citas
+export const FAMILIA_BUILD_ID = 'tarea-lead-visible-v20261004g'
+export const FAMILIA_PWA_CACHE_ID = 'familia-hellen-mati-v20261004g'
 
 function familiaVersionJson(): Plugin {
   return {
@@ -46,7 +46,7 @@ export default defineConfig({
         display: 'standalone',
         orientation: 'portrait-primary',
         lang: 'es',
-        start_url: '/personal/familia/?v=20261004f',
+        start_url: '/personal/familia/?v=20261004g',
         scope: '/personal/familia/',
         icons: [
           { src: 'icons/pwa-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
