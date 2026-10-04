@@ -1,7 +1,7 @@
 {
   "name": "familia-mati",
   "private": true,
-  "version": "1.0.11-lead-in-forms",
+  "version": "1.0.12-profile-filter",
   "type": "module",
   "scripts": {
     "dev": "vite",

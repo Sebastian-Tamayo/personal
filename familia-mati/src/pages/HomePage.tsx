@@ -27,6 +27,7 @@ import {
   formatDateLabel,
   kindLabel,
   memberByKey,
+  normalizeMemberKey,
   normalizeReminderLeadMinutes,
   shiftISODate,
   todayISO,
@@ -41,7 +42,7 @@ import { useRoutinesStore } from '../store/routinesStore'
 
 type AgendaTab = 'hoy' | 'proximos' | 'pasados'
 type ParaAssignee = 'sebas' | 'lore' | 'hellen' | 'todos'
-/** Todos = ver todo el hogar; persona chip = default «Para» for that person. */
+/** Chip filter: exact assignee match. Todos = only `todos`, not everyone’s pile. */
 type ViewFilter = ParaAssignee
 
 const HOUSEHOLD = FAMILY_MEMBERS.filter((m) => m.key === 'sebas' || m.key === 'lore' || m.key === 'hellen')
@@ -49,6 +50,12 @@ const HOUSEHOLD = FAMILY_MEMBERS.filter((m) => m.key === 'sebas' || m.key === 'l
 /** Default «Para» follows the filter chip — never the logged-in creator. */
 function defaultParaForFilter(filter: ViewFilter): ParaAssignee {
   return filter
+}
+
+/** Strict UI filter: chip Hellen → only Hellen; Todos → only assignee `todos`. */
+function itemMatchesViewFilter(item: OrgItem, filter: ViewFilter): boolean {
+  const who = normalizeMemberKey(item.assignee)
+  return who === filter
 }
 
 export function HomePage() {
@@ -125,8 +132,11 @@ export function HomePage() {
 
   const today = todayISO()
 
-  /** Everyone always sees all household items; chips only set default «Para». */
-  const visibleItems = useMemo(() => items.filter((i) => i.kind !== 'bebe'), [items])
+  /** Chip filters lists by assignee (Firestore still readable by all). */
+  const visibleItems = useMemo(
+    () => items.filter((i) => i.kind !== 'bebe' && itemMatchesViewFilter(i, viewFilter)),
+    [items, viewFilter],
+  )
 
   const diariasHoy = visibleItems.filter(
     (i) =>
@@ -408,7 +418,7 @@ export function HomePage() {
       <section
         className="animate-rise flex gap-2 overflow-x-auto pb-1"
         data-testid="filter-chips"
-        aria-label="Filtro y Para por defecto al crear (todos ven todas las listas)"
+        aria-label="Filtrar listas por Para (chip = solo ese assignee; Todos = solo compartidos)"
       >
         <FilterChip
           active={viewFilter === 'todos'}
@@ -446,29 +456,41 @@ export function HomePage() {
         <button
           type="button"
           onClick={openNewDaily}
-          className="inline-flex items-center justify-center gap-1.5 rounded-2xl border-2 border-[#ca8a04]/50 bg-gradient-to-br from-[#fef9c3] to-[#fde68a] px-2 py-3 text-xs font-extrabold text-[#854d0e] shadow-sm sm:text-sm"
+          className="inline-flex flex-col items-center justify-center gap-0.5 rounded-2xl border-2 border-[#ca8a04]/50 bg-gradient-to-br from-[#fef9c3] to-[#fde68a] px-2 py-3 text-xs font-extrabold leading-tight text-[#854d0e] shadow-sm sm:text-sm"
           data-testid="btn-nueva-tarea"
+          aria-label="Nueva tarea"
         >
-          <Plus className="size-4 shrink-0" aria-hidden />
-          Nueva tarea
+          <span className="inline-flex items-center gap-1">
+            <Plus className="size-4 shrink-0" aria-hidden />
+            Nueva
+          </span>
+          <span>tarea</span>
         </button>
         <button
           type="button"
           onClick={openNewRoutine}
-          className="inline-flex items-center justify-center gap-1.5 rounded-2xl border-2 border-[#0369a1]/40 bg-gradient-to-br from-[#e0f2fe] to-[#bae6fd] px-2 py-3 text-xs font-extrabold text-[#075985] shadow-sm sm:text-sm"
+          className="inline-flex flex-col items-center justify-center gap-0.5 rounded-2xl border-2 border-[#0369a1]/40 bg-gradient-to-br from-[#e0f2fe] to-[#bae6fd] px-2 py-3 text-xs font-extrabold leading-tight text-[#075985] shadow-sm sm:text-sm"
           data-testid="btn-nueva-rutina"
+          aria-label="Nueva rutina"
         >
-          <Plus className="size-4 shrink-0" aria-hidden />
-          Nueva rutina
+          <span className="inline-flex items-center gap-1">
+            <Plus className="size-4 shrink-0" aria-hidden />
+            Nueva
+          </span>
+          <span>rutina</span>
         </button>
         <button
           type="button"
           onClick={openNewAgenda}
-          className="inline-flex items-center justify-center gap-1.5 rounded-2xl border-2 border-[#0f766e]/40 bg-gradient-to-br from-[#f0fdfa] to-[#ccfbf1] px-2 py-3 text-xs font-extrabold text-[#0f766e] shadow-sm sm:text-sm"
+          className="inline-flex flex-col items-center justify-center gap-0.5 rounded-2xl border-2 border-[#0f766e]/40 bg-gradient-to-br from-[#f0fdfa] to-[#ccfbf1] px-2 py-3 text-xs font-extrabold leading-tight text-[#0f766e] shadow-sm sm:text-sm"
           data-testid="btn-nueva-cita"
+          aria-label="Nueva cita"
         >
-          <Plus className="size-4 shrink-0" aria-hidden />
-          Nueva cita
+          <span className="inline-flex items-center gap-1">
+            <Plus className="size-4 shrink-0" aria-hidden />
+            Nueva
+          </span>
+          <span>cita</span>
         </button>
       </section>
 
