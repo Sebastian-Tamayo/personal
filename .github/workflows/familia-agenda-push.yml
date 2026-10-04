@@ -1,6 +1,6 @@
 # Closed-app mobile Web Push for Familia Hellen y Mati.
 # - Agenda citas/compromisos (lead time per profile)
-# - Rutinas digest once/day ~16:00 Europe/Madrid (familia_routines → todos)
+# - Rutinas digest once/day at familia_settings/routinesDigest.time (default 16:00 Madrid → todos)
 #
 # Schedules use UTC (GitHub does not support TZ in cron).
 # Europe/Madrid = UTC+1 (CET) / UTC+2 (CEST). Reminder math uses REMINDER_TZ.
@@ -62,6 +62,7 @@ jobs:
           VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT }}
           REMINDER_TZ: Europe/Madrid
           REMINDER_WINDOW_MINUTES: '60'
-          ROUTINES_DIGEST_HOUR: '16'
+          # Fallback only — live clock is familia_settings/routinesDigest.time (Rutinas-only)
+          ROUTINES_DIGEST_TIME: '16:00'
           ROUTINES_DIGEST_WINDOW_MINUTES: '12'
         run: node scripts/send-agenda-reminders.mjs

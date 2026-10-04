@@ -6,20 +6,31 @@ import {
   onSnapshot,
   orderBy,
   query,
+  setDoc,
   updateDoc,
   type Unsubscribe,
 } from 'firebase/firestore'
 import { create } from 'zustand'
-import type { FamiliaRoutine, RoutineCadence } from '../lib/family'
+import {
+  DEFAULT_ROUTINES_DIGEST_TIME,
+  normalizeDigestTime,
+  type FamiliaRoutine,
+  type RoutineCadence,
+} from '../lib/family'
 import { getDb } from '../lib/firebase'
 
 const COLLECTION = 'familia_routines'
+/** Shared household setting — one digest clock for all routines (not agenda). */
+const DIGEST_DOC = ['familia_settings', 'routinesDigest'] as const
 
 interface RoutinesState {
   routines: FamiliaRoutine[]
+  /** HH:mm Europe/Madrid — one shared alarm for the whole routines list. */
+  digestTime: string
   loading: boolean
   syncError: string | null
   subscribe: () => () => void
+  setDigestTime: (time: string, uid: string) => Promise<void>
   addRoutine: (
     input: { title: string; notes: string; cadence: RoutineCadence },
     uid: string,
@@ -31,7 +42,8 @@ interface RoutinesState {
   deleteRoutine: (id: string) => Promise<void>
 }
 
-let unsub: Unsubscribe | null = null
+let unsubRoutines: Unsubscribe | null = null
+let unsubDigest: Unsubscribe | null = null
 
 function normalizeCadence(raw: unknown): RoutineCadence {
   const c = String(raw || '')
@@ -56,13 +68,16 @@ function mapRoutine(id: string, data: Record<string, unknown>): FamiliaRoutine {
 
 export const useRoutinesStore = create<RoutinesState>((set, get) => ({
   routines: [],
+  digestTime: DEFAULT_ROUTINES_DIGEST_TIME,
   loading: true,
   syncError: null,
 
   subscribe: () => {
-    unsub?.()
+    unsubRoutines?.()
+    unsubDigest?.()
     set({ loading: true, syncError: null })
-    unsub = onSnapshot(
+
+    unsubRoutines = onSnapshot(
       query(collection(getDb(), COLLECTION), orderBy('createdAt', 'asc')),
       (snap) => {
         const routines = snap.docs
@@ -72,9 +87,45 @@ export const useRoutinesStore = create<RoutinesState>((set, get) => ({
       },
       (err) => set({ syncError: err.message, loading: false }),
     )
+
+    unsubDigest = onSnapshot(
+      doc(getDb(), DIGEST_DOC[0], DIGEST_DOC[1]),
+      (snap) => {
+        const data = (snap.data() || {}) as Record<string, unknown>
+        set({ digestTime: normalizeDigestTime(data.time ?? DEFAULT_ROUTINES_DIGEST_TIME) })
+      },
+      (err) => set({ syncError: err.message }),
+    )
+
     return () => {
-      unsub?.()
-      unsub = null
+      unsubRoutines?.()
+      unsubDigest?.()
+      unsubRoutines = null
+      unsubDigest = null
+    }
+  },
+
+  setDigestTime: async (time, uid) => {
+    const next = normalizeDigestTime(time)
+    const prev = get().digestTime
+    set({ digestTime: next, syncError: null })
+    try {
+      await setDoc(
+        doc(getDb(), DIGEST_DOC[0], DIGEST_DOC[1]),
+        {
+          time: next,
+          tz: 'Europe/Madrid',
+          updatedAt: Date.now(),
+          updatedBy: uid,
+        },
+        { merge: true },
+      )
+    } catch (err) {
+      set({
+        digestTime: prev,
+        syncError: err instanceof Error ? err.message : 'No se pudo guardar la hora del aviso',
+      })
+      throw err
     }
   },
 
@@ -142,7 +193,9 @@ export const useRoutinesStore = create<RoutinesState>((set, get) => ({
       })
     } catch (err) {
       set((s) => ({
-        routines: prev ? [...s.routines.filter((r) => r.id !== id), prev].sort((a, b) => a.createdAt - b.createdAt) : s.routines,
+        routines: prev
+          ? [...s.routines.filter((r) => r.id !== id), prev].sort((a, b) => a.createdAt - b.createdAt)
+          : s.routines,
         syncError: err instanceof Error ? err.message : 'No se pudo actualizar la rutina',
       }))
       throw err

@@ -120,13 +120,16 @@ export interface OrgItem {
 /** Weekly / monthly household routines — separate from chores and agenda citas. */
 export type RoutineCadence = 'semanal' | 'mensual' | ''
 
+/** Shared daily digest clock for ALL routines (one push/day). Agenda citas unchanged. */
+export const DEFAULT_ROUTINES_DIGEST_TIME = '16:00'
+
 export interface FamiliaRoutine {
   id: string
   title: string
   notes: string
   /** Optional cadence label shown in UI (semanal / mensual). */
   cadence: RoutineCadence
-  /** Inactive routines stay in Firestore but are hidden from board + 16:00 digest. */
+  /** Inactive routines stay in Firestore but are hidden from board + digest. */
   active: boolean
   createdAt: number
   updatedAt: number
@@ -138,6 +141,20 @@ export function cadenceLabel(cadence: RoutineCadence | string | null | undefined
   if (c === 'semanal') return 'Semanal'
   if (c === 'mensual') return 'Mensual'
   return ''
+}
+
+/** Normalize HH:mm (24h). Invalid → default 16:00. */
+export function normalizeDigestTime(raw: unknown): string {
+  const s = String(raw ?? '')
+    .trim()
+  const m = s.match(/^(\d{1,2}):(\d{2})$/)
+  if (!m) return DEFAULT_ROUTINES_DIGEST_TIME
+  const h = Number(m[1])
+  const min = Number(m[2])
+  if (!Number.isFinite(h) || !Number.isFinite(min) || h < 0 || h > 23 || min < 0 || min > 59) {
+    return DEFAULT_ROUTINES_DIGEST_TIME
+  }
+  return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`
 }
 
 /** Presets for “Avisar con antelación” (minutes before event). Default 2 h. Profile-wide, not per cita. */

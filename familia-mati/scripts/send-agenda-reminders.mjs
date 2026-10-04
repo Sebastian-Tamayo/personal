@@ -4,8 +4,10 @@
  * 1) Agenda · citas y compromisos ONLY (kinds: cita, tarea).
  *    NEVER notifies for Tareas diarias (kind: chore) or bebé items.
  *    Lead time is per-user/persona (familia_users.personaSettings / reminderLeadMinutes); default 120 min.
- * 2) Rutinas digest — ONE push/day at ~16:00 Europe/Madrid to TODOS (all household push subs),
- *    listing active familia_routines titles. Deduped via familia_routines_digest_sent/{YYYY-MM-DD}.
+ * 2) Rutinas digest — ONE push/day to TODOS (all household push subs), listing active
+ *    familia_routines titles. Clock from familia_settings/routinesDigest.time (HH:mm, default 16:00
+ *    Europe/Madrid). Does NOT affect agenda/cita lead timing. Deduped via
+ *    familia_routines_digest_sent/{YYYY-MM-DD}.
  *
  * Runs outside the browser (GitHub Actions cron / repository_dispatch). Mobile Web Push — not email.
  *
@@ -17,8 +19,8 @@
  *   VAPID_SUBJECT=mailto:you@example.com
  *   REMINDER_TZ=Europe/Madrid
  *   REMINDER_WINDOW_MINUTES=45   — primary window after remindAt; catch-up continues until event
- *   ROUTINES_DIGEST_HOUR=16
- *   ROUTINES_DIGEST_WINDOW_MINUTES=12  — fire if Madrid local time is in [16:00, 16:12)
+ *   ROUTINES_DIGEST_TIME=16:00   — fallback if Firestore setting missing
+ *   ROUTINES_DIGEST_WINDOW_MINUTES=12  — fire if Madrid local ∈ [digestTime, digestTime+window)
  *   VAPID_KEYS_FILE=/path/to/secrets/vapid.json  (local fallback)
  */
 import { readFileSync, existsSync } from 'node:fs'
@@ -209,12 +211,30 @@ function madridParts(ms, timeZone) {
   }
 }
 
-function inRoutinesDigestWindow(ms, timeZone, hour, windowMinutes) {
+/** Parse HH:mm → { hour, minute }. Invalid → 16:00. */
+function parseDigestClock(raw) {
+  const s = String(raw ?? '').trim()
+  const m = s.match(/^(\d{1,2}):(\d{2})$/)
+  if (!m) return { hour: 16, minute: 0, time: '16:00' }
+  const hour = Number(m[1])
+  const minute = Number(m[2])
+  if (!Number.isFinite(hour) || !Number.isFinite(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+    return { hour: 16, minute: 0, time: '16:00' }
+  }
+  const time = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
+  return { hour, minute, time }
+}
+
+/**
+ * Window from configured digest clock (hour:minute) for `windowMinutes`.
+ * Agenda/cita lead windows are unrelated — this is Rutinas-only.
+ */
+function inRoutinesDigestWindow(ms, timeZone, digestHour, digestMinute, windowMinutes) {
   const { day, hour: h, minute: m } = madridParts(ms, timeZone)
   const mins = h * 60 + m
-  const start = hour * 60
+  const start = digestHour * 60 + digestMinute
   const end = start + windowMinutes
-  return { ok: mins >= start && mins < end, day, hour: h, minute: m }
+  return { ok: mins >= start && mins < end, day, hour: h, minute: m, start, end }
 }
 
 function truncateBody(text, maxLen = 180) {
@@ -225,20 +245,36 @@ function truncateBody(text, maxLen = 180) {
 
 /**
  * ONE notification listing active routines for all household push devices.
+ * Clock from familia_settings/routinesDigest (shared for all routines; not per-routine, not agenda).
  * Marks familia_routines_digest_sent/{madridDay} so 5‑min cron ticks do not re-fire.
  */
 async function sendRoutinesDigest({ db, webpush, subs, now, tz }) {
-  const hour = Number(process.env.ROUTINES_DIGEST_HOUR || 16)
   const windowMinutes = Number(process.env.ROUTINES_DIGEST_WINDOW_MINUTES || 12)
-  const win = inRoutinesDigestWindow(now, tz, hour, windowMinutes)
+  let settingTime = process.env.ROUTINES_DIGEST_TIME || '16:00'
+  try {
+    const settingSnap = await db.collection('familia_settings').doc('routinesDigest').get()
+    if (settingSnap.exists) {
+      const d = settingSnap.data() || {}
+      if (d.time) settingTime = d.time
+    }
+  } catch (e) {
+    console.warn('routinesDigest setting read failed; using fallback', String(e?.message || e))
+  }
+  const clock = parseDigestClock(settingTime)
+  const win = inRoutinesDigestWindow(now, tz, clock.hour, clock.minute, windowMinutes)
+  const endMins = clock.hour * 60 + clock.minute + windowMinutes
+  const endH = Math.floor(endMins / 60) % 24
+  const endM = endMins % 60
+  const windowLabel = `${clock.time}–${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`
   if (!win.ok) {
     return {
       sent: 0,
       skipped: true,
       reason: 'outside_window',
+      digestTime: clock.time,
       madridDay: win.day,
       madridClock: `${String(win.hour).padStart(2, '0')}:${String(win.minute).padStart(2, '0')}`,
-      window: `${hour}:00–${hour}:${String(windowMinutes).padStart(2, '0')}`,
+      window: windowLabel,
     }
   }
 
@@ -249,6 +285,7 @@ async function sendRoutinesDigest({ db, webpush, subs, now, tz }) {
       sent: 0,
       skipped: true,
       reason: 'already_sent_today',
+      digestTime: clock.time,
       madridDay: win.day,
       madridClock: `${String(win.hour).padStart(2, '0')}:${String(win.minute).padStart(2, '0')}`,
     }
@@ -261,12 +298,12 @@ async function sendRoutinesDigest({ db, webpush, subs, now, tz }) {
     .sort((a, b) => Number(a.createdAt || 0) - Number(b.createdAt || 0))
 
   if (!active.length) {
-    // Mark day so empty board does not keep retrying every tick (optional: skip mark).
-    // Prefer retry if someone adds a routine later the same afternoon — do NOT mark.
+    // Prefer retry if someone adds a routine later in the same window — do NOT mark.
     return {
       sent: 0,
       skipped: true,
       reason: 'no_active_routines',
+      digestTime: clock.time,
       madridDay: win.day,
       madridClock: `${String(win.hour).padStart(2, '0')}:${String(win.minute).padStart(2, '0')}`,
     }
@@ -296,6 +333,7 @@ async function sendRoutinesDigest({ db, webpush, subs, now, tz }) {
       sent: 0,
       skipped: true,
       reason: 'no_push_subs',
+      digestTime: clock.time,
       madridDay: win.day,
       routineCount: active.length,
     }
@@ -335,6 +373,7 @@ async function sendRoutinesDigest({ db, webpush, subs, now, tz }) {
       sent: 0,
       skipped: true,
       reason: 'all_devices_failed',
+      digestTime: clock.time,
       madridDay: win.day,
       routineCount: active.length,
       errors: errors.slice(0, 10),
@@ -344,6 +383,7 @@ async function sendRoutinesDigest({ db, webpush, subs, now, tz }) {
   await sentRef.set({
     at: now,
     madridDay: win.day,
+    digestTime: clock.time,
     recipients: okCount,
     deliveredTo: [...new Set(deliveredTo)],
     routineIds: active.map((r) => r.id),
@@ -356,6 +396,7 @@ async function sendRoutinesDigest({ db, webpush, subs, now, tz }) {
     sent: okCount,
     skipped: false,
     reason: 'sent',
+    digestTime: clock.time,
     madridDay: win.day,
     madridClock: `${String(win.hour).padStart(2, '0')}:${String(win.minute).padStart(2, '0')}`,
     routineCount: active.length,

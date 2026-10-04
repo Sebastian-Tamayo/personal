@@ -85,9 +85,11 @@ export function HomePage() {
   const [agendaTab, setAgendaTab] = useState<AgendaTab>('hoy')
 
   const routines = useRoutinesStore((s) => s.routines)
+  const digestTime = useRoutinesStore((s) => s.digestTime)
   const routinesLoading = useRoutinesStore((s) => s.loading)
   const routinesSyncError = useRoutinesStore((s) => s.syncError)
   const subscribeRoutines = useRoutinesStore((s) => s.subscribe)
+  const setDigestTime = useRoutinesStore((s) => s.setDigestTime)
   const addRoutine = useRoutinesStore((s) => s.addRoutine)
   const updateRoutine = useRoutinesStore((s) => s.updateRoutine)
   const deleteRoutine = useRoutinesStore((s) => s.deleteRoutine)
@@ -98,6 +100,7 @@ export function HomePage() {
   const [routineCadence, setRoutineCadence] = useState<RoutineCadence>('semanal')
   const [routineEditing, setRoutineEditing] = useState<FamiliaRoutine | null>(null)
   const [routineBusy, setRoutineBusy] = useState(false)
+  const [digestBusy, setDigestBusy] = useState(false)
 
   useEffect(() => subscribe(), [subscribe])
   useEffect(() => subscribeRoutines(), [subscribeRoutines])
@@ -573,11 +576,40 @@ export function HomePage() {
             Rutinas semanales / mensuales
           </h2>
           <p className="mt-0.5 text-xs font-semibold text-[#0369a1]">
-            Recordatorio único a las 16:00 · visibles para todos
+            Un solo aviso al día para todas las rutinas · visibles para todos
           </p>
         </div>
 
         <div className="space-y-3 p-4">
+          <div
+            className="rounded-2xl border border-[#0369a1]/25 bg-white/85 p-3"
+            data-testid="routines-digest-time"
+          >
+            <label className="flex flex-wrap items-end gap-3">
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-extrabold text-[#075985]">
+                  Hora del aviso (compartida)
+                </span>
+                <span className="mt-0.5 block text-[11px] font-semibold leading-snug text-[#0369a1]">
+                  Todas las rutinas usan esta misma alarma · Europe/Madrid · no afecta a la agenda
+                </span>
+              </span>
+              <input
+                type="time"
+                value={digestTime}
+                disabled={digestBusy}
+                onChange={(e) => {
+                  const next = e.target.value
+                  if (!next) return
+                  setDigestBusy(true)
+                  void setDigestTime(next, user.uid).finally(() => setDigestBusy(false))
+                }}
+                className="rounded-xl border border-[var(--line)] bg-white px-3 py-2.5 font-extrabold text-[#075985] outline-none ring-[#0369a1] focus:ring-2 disabled:opacity-60"
+                data-testid="routines-digest-time-input"
+              />
+            </label>
+          </div>
+
           {routineFormOpen ? (
             <form
               className="grid gap-2 rounded-2xl border border-[#0369a1]/25 bg-white/90 p-3"
