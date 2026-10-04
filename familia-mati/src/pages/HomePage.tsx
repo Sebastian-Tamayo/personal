@@ -13,7 +13,7 @@ import {
 } from 'lucide-react'
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { AppShell } from '../components/AppShell'
-import { EmptyCapybara } from '../components/Capybara'
+import { EmptySection } from '../components/EmptySection'
 import { PushOptIn } from '../components/PushOptIn'
 import {
   DAILY_TASK_SUGGESTIONS,
@@ -618,8 +618,8 @@ export function HomePage() {
           {loading ? (
             <p className="text-sm text-[var(--ink-soft)]">Cargando…</p>
           ) : diariasHoy.length === 0 ? (
-            <EmptyCapybara
-              variant="sit"
+            <EmptySection
+              photo="tareas"
               accent="warm"
               message={
                 <>
@@ -770,9 +770,9 @@ export function HomePage() {
           {routinesLoading ? (
             <p className="text-sm text-[var(--ink-soft)]">Cargando…</p>
           ) : routines.length === 0 ? (
-            <EmptyCapybara
-              variant="leaf"
-              accent="teal"
+            <EmptySection
+              photo="rutinas"
+              accent="sky"
               message={
                 <>
                   Sin rutinas aún. Pulsa <span className="font-extrabold">Nueva rutina</span>.
@@ -1001,8 +1001,8 @@ export function HomePage() {
           {loading ? (
             <p className="text-sm text-[var(--ink-soft)]">Cargando…</p>
           ) : agendaList.length === 0 ? (
-            <EmptyCapybara
-              variant={agendaTab === 'pasados' ? 'leaf' : 'peek'}
+            <EmptySection
+              photo="citas"
               accent="teal"
               message={
                 agendaTab === 'pasados' ? (
