@@ -65,6 +65,8 @@ export function HomePage() {
   const [dailyNotes, setDailyNotes] = useState('')
   const [dailyAssignee, setDailyAssignee] = useState<ParaAssignee>('todos')
   const [dailyDate, setDailyDate] = useState(todayISO())
+  /** Optional clock — with time, cron uses the same per-profile lead presets as citas. */
+  const [dailyTime, setDailyTime] = useState('')
   const [dailyEditing, setDailyEditing] = useState<OrgItem | null>(null)
   const [dailyBusy, setDailyBusy] = useState(false)
 
@@ -134,6 +136,7 @@ export function HomePage() {
     setDailyNotes('')
     setDailyAssignee(defaultParaForFilter(viewFilter))
     setDailyDate(todayISO())
+    setDailyTime('')
     setDailyEditing(null)
     setShowDailyForm(false)
   }
@@ -163,6 +166,7 @@ export function HomePage() {
     setDailyNotes('')
     setDailyAssignee(defaultParaForFilter(viewFilter))
     setDailyDate(todayISO())
+    setDailyTime('')
     setShowDailyForm(true)
     setShowAgendaForm(false)
     setShowRoutineForm(false)
@@ -208,7 +212,7 @@ export function HomePage() {
           kind: 'chore',
           assignee: dailyAssignee,
           date,
-          time: dailyEditing.time || '',
+          time: dailyTime,
           status: dailyEditing.status,
         })
       } else {
@@ -219,7 +223,7 @@ export function HomePage() {
             kind: 'chore',
             assignee: dailyAssignee,
             date,
-            time: '',
+            time: dailyTime,
           },
           user.uid,
         )
@@ -325,6 +329,7 @@ export function HomePage() {
         : 'todos',
     )
     setDailyDate(item.date || todayISO())
+    setDailyTime(item.time || '')
     setShowDailyForm(true)
     setShowAgendaForm(false)
     setShowRoutineForm(false)
@@ -442,7 +447,8 @@ export function HomePage() {
             Tareas diarias
           </h2>
           <p className="mt-0.5 text-xs font-semibold text-[#a16207]">
-            {dailyPending} pendientes · {dailyDone} hechas · todos los perfiles
+            {dailyPending} pendientes · {dailyDone} hechas · aviso si pones hora (misma antelación
+            que citas)
           </p>
         </div>
 
@@ -518,6 +524,22 @@ export function HomePage() {
                 accent="#ca8a04"
                 testId="daily-date-stepper"
               />
+              <label className="text-sm">
+                <span className="mb-1 block font-bold text-[var(--ink-soft)]">
+                  Hora (opcional · para aviso)
+                </span>
+                <input
+                  type="time"
+                  value={dailyTime}
+                  onChange={(e) => setDailyTime(e.target.value)}
+                  className="w-full rounded-xl border border-[var(--line)] bg-white px-3 py-2.5"
+                  data-testid="daily-time-input"
+                />
+                <p className="mt-1 text-[11px] font-semibold leading-snug text-[#a16207]">
+                  Con hora, el aviso usa la misma antelación que las citas (30 min / 1 h / 2 h / 3 h /
+                  1 día). Sin hora, no hay push.
+                </p>
+              </label>
               <button
                 type="submit"
                 disabled={dailyBusy}

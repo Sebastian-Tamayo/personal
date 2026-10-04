@@ -3,8 +3,8 @@
 /* eslint-disable no-undef */
 self.addEventListener('push', (event) => {
   let data = {
-    title: 'Familia Hellen y Mati',
-    body: 'Tienes un aviso de la agenda.',
+    title: 'Hellen y Mati',
+    body: 'Hay un aviso de la agenda para ti.',
     url: '/personal/familia/',
     tag: 'familia-agenda',
   }
@@ -22,31 +22,44 @@ self.addEventListener('push', (event) => {
     }
   }
 
-  const title = data.title || 'Familia Hellen y Mati'
+  const title = data.title || 'Hellen y Mati'
   const body = data.body || ''
   const url = data.url || '/personal/familia/'
   const tag = data.tag || 'familia-agenda'
 
-  // iOS Web Push is picky: prefer a minimal option set that always shows a banner.
-  // (requireInteraction / exotic fields have caused silent showNotification failures.)
+  // Sound: never silent. Prefer platform default alert sound.
+  // iOS: sound only for Home Screen PWA + granted permission; custom sound URLs
+  // are unreliable on iOS Web Push — do not set `sound`.
+  // Avoid requireInteraction (previously broke iOS showNotification).
   event.waitUntil(
     (async () => {
+      const base = {
+        body,
+        icon: '/personal/familia/icons/pwa-192.png',
+        badge: '/personal/familia/icons/pwa-192.png',
+        data: { url },
+        lang: 'es',
+        tag,
+        renotify: true,
+        silent: false,
+      }
       try {
         await self.registration.showNotification(title, {
-          body,
-          icon: '/personal/familia/icons/pwa-192.png',
-          badge: '/personal/familia/icons/pwa-192.png',
-          data: { url },
-          lang: 'es',
-          tag,
-          renotify: true,
+          ...base,
+          // Android may vibrate; iOS ignores unknown/unsupported fields safely.
+          vibrate: [180, 80, 180],
         })
       } catch {
-        await self.registration.showNotification(title, {
-          body,
-          data: { url },
-          tag,
-        })
+        try {
+          await self.registration.showNotification(title, {
+            body,
+            data: { url },
+            tag,
+            silent: false,
+          })
+        } catch {
+          await self.registration.showNotification(title, { body, data: { url }, tag })
+        }
       }
     })(),
   )

@@ -110,6 +110,9 @@ export function PushOptIn() {
           <Clock3 className="size-4 shrink-0" aria-hidden />
           Elegimos el tiempo del aviso
         </h2>
+        <p className="mb-1.5 text-[11px] font-semibold leading-snug text-[#0369a1]/90">
+          Misma antelación para citas y para tareas diarias con hora
+        </p>
         <div className="flex flex-wrap gap-1.5" role="group" aria-label="Antelación del aviso">
           {REMINDER_LEAD_PRESETS.map((p) => {
             const selected = p.minutes === leadMinutes
@@ -167,9 +170,9 @@ export function PushOptIn() {
         Activar avisos
       </h2>
       <p className="mb-2 text-sm font-semibold text-[#0c4a6e]">
-        Avisos al móvil para la{' '}
-        <span className="font-extrabold">Agenda · citas y compromisos</span> (no para tareas
-        diarias de casa). Lore y Hellen aprueban por separado.
+        Avisos al móvil para la <span className="font-extrabold">agenda</span> y para{' '}
+        <span className="font-extrabold">tareas diarias con hora</span>. Lore y Hellen aprueban por
+        separado.
       </p>
       {iosNeedsHomeScreen ? (
         <p
@@ -182,8 +185,9 @@ export function PushOptIn() {
       ) : null}
       <ul className="mb-3 list-disc space-y-1 pl-4 text-xs font-semibold text-[#0c4a6e]/90">
         <li>
-          Solo <span className="font-extrabold">citas y compromisos</span> con fecha y hora — las
-          tareas diarias (barrer, platos…) no envían aviso.
+          <span className="font-extrabold">Citas</span> y{' '}
+          <span className="font-extrabold">tareas con fecha y hora</span> — misma antelación (30 min /
+          1 h / 2 h / 3 h / 1 día). Sin hora en la tarea, no hay push.
         </li>
         <li>Mismo correo de Lore → dos perfiles; cada uno confirma avisos por su lado.</li>
         <li>

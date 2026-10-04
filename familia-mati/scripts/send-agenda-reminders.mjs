@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
  * Send Web Push for:
- * 1) Agenda · citas y compromisos ONLY (kinds: cita, tarea).
- *    NEVER notifies for Tareas diarias (kind: chore) or bebé items.
- *    Lead time is per-user/persona (familia_users.personaSettings / reminderLeadMinutes); default 120 min.
+ * 1) Timed items with date+time: agenda (cita, tarea) AND daily chores (kind: chore) when they
+ *    have a clock time. Skip bebé and chores without time. Lead time is per-user/persona
+ *    (familia_users.personaSettings / reminderLeadMinutes); default 120 min — same presets for
+ *    citas and timed tasks. One push per item/device in the lead window (familia_reminders_sent).
  * 2) Rutinas digest — ONE push/day to TODOS (all household push subs), listing active
  *    familia_routines titles. Clock from familia_settings/routinesDigest.time (HH:mm, default 16:00
- *    Europe/Madrid). Does NOT affect agenda/cita lead timing. Deduped via
- *    familia_routines_digest_sent/{YYYY-MM-DD}.
+ *    Europe/Madrid). Deduped via familia_routines_digest_sent/{YYYY-MM-DD}.
  *
  * Runs outside the browser (GitHub Actions cron / repository_dispatch). Mobile Web Push — not email.
  *
@@ -50,14 +50,15 @@ function normalizeLeadMinutes(raw) {
   return best
 }
 
+/** Warm Spanish lead phrase for agenda avisos (not emoji-heavy). */
 function formatLeadBody(minutes) {
   const m = normalizeLeadMinutes(minutes)
-  if (m === 30) return 'En ~30 min'
-  if (m === 60) return 'En ~1 h'
-  if (m === 120) return 'En ~2 h'
-  if (m === 180) return 'En ~3 h'
-  if (m === 1440) return 'En ~1 día'
-  return `En ~${m} min`
+  if (m === 30) return 'En unos 30 min'
+  if (m === 60) return 'En aproximadamente 1 h'
+  if (m === 120) return 'En aproximadamente 2 h'
+  if (m === 180) return 'En aproximadamente 3 h'
+  if (m === 1440) return 'Para mañana más o menos'
+  return `En unos ${m} min`
 }
 
 function loadVapid() {
@@ -317,8 +318,8 @@ async function sendRoutinesDigest({ db, webpush, subs, now, tz }) {
     if (cad === 'semanal' || cad === 'mensual') return `${title} (${cad})`
     return title
   })
-  const title = 'Familia · Rutinas de hoy'
-  const body = truncateBody(names.join(' · '))
+  const title = 'Hellen y Mati · rutinas'
+  const body = truncateBody(`Para hoy en casa: ${names.join(' · ')}`)
   const payload = JSON.stringify({
     title,
     body,
@@ -350,7 +351,7 @@ async function sendRoutinesDigest({ db, webpush, subs, now, tz }) {
           keys: { p256dh: s.keys.p256dh, auth: s.keys.auth },
         },
         payload,
-        { TTL: 60 * 60 * 12, urgency: 'normal' },
+        { TTL: 60 * 60 * 12, urgency: 'high' },
       )
       okCount++
       deliveredTo.push(s.memberKey)
@@ -476,12 +477,12 @@ async function main() {
   const skipDiag = []
   for (const doc of itemsSnap.docs) {
     const d = doc.data() || {}
-    // Agenda only: cita + tarea (compromisos). Skip chores (tareas diarias) and bebé.
-    if (d.kind === 'chore' || d.kind === 'bebe') {
+    // Timed pushes: cita + tarea (agenda) + chore (tareas diarias) when they have a clock time.
+    if (d.kind === 'bebe') {
       skipDiag.push({ id: doc.id, reason: 'kind_skipped', kind: d.kind })
       continue
     }
-    if (d.kind !== 'cita' && d.kind !== 'tarea') {
+    if (d.kind !== 'cita' && d.kind !== 'tarea' && d.kind !== 'chore') {
       skipDiag.push({ id: doc.id, reason: 'kind_unknown', kind: d.kind })
       continue
     }
@@ -491,6 +492,11 @@ async function main() {
     }
     const date = String(d.date || '')
     const time = String(d.time || '')
+    // Chores without time are all-day — no push (same as before for untimed tasks).
+    if (d.kind === 'chore' && !/^\d{2}:\d{2}/.test(time)) {
+      skipDiag.push({ id: doc.id, reason: 'chore_no_time', date, time, title: d.title })
+      continue
+    }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}/.test(time)) {
       skipDiag.push({
         id: doc.id,
@@ -665,8 +671,8 @@ async function main() {
         continue
       }
 
-      const title = 'Familia Hellen y Mati · aviso'
-      const body = `${formatLeadBody(lead)}: ${item.title} (${when})`
+      const title = 'Hellen y Mati · te avisamos'
+      const body = `${item.title} — ${formatLeadBody(lead)} (${when})`
       const payload = JSON.stringify({
         title,
         body,

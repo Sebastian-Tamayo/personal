@@ -1,7 +1,7 @@
 {
   "name": "familia-mati",
   "private": true,
-  "version": "1.0.7-notas-breaks",
+  "version": "1.0.9-tarea-lead",
   "type": "module",
   "scripts": {
     "dev": "vite",
