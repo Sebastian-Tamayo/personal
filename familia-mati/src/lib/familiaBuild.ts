@@ -1,5 +1,5 @@
 /** Keep in sync with index.html meta familia-build + vite PWA cache bump. */
-export const FAMILIA_BUILD_ID = 'tarea-assignee-v20261004c'
+export const FAMILIA_BUILD_ID = 'notas-breaks-v20261004d'
 
 export const FAMILIA_VERSION_URL = `${import.meta.env.BASE_URL}familia-version.json`
 

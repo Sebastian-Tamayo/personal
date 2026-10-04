@@ -4,9 +4,9 @@ import { defineConfig, type Plugin } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
 // Nested under GitHub Pages: https://sebastian-tamayo.github.io/personal/familia/
-// Cache-bust bump: daily task assignee badge = Para (not creator)
-export const FAMILIA_BUILD_ID = 'tarea-assignee-v20261004c'
-export const FAMILIA_PWA_CACHE_ID = 'familia-hellen-mati-v20261004c'
+// Cache-bust bump: assignee Para badge + multi-line notes (pre-wrap)
+export const FAMILIA_BUILD_ID = 'notas-breaks-v20261004d'
+export const FAMILIA_PWA_CACHE_ID = 'familia-hellen-mati-v20261004d'
 
 function familiaVersionJson(): Plugin {
   return {
@@ -46,7 +46,7 @@ export default defineConfig({
         display: 'standalone',
         orientation: 'portrait-primary',
         lang: 'es',
-        start_url: '/personal/familia/?v=20261004c',
+        start_url: '/personal/familia/?v=20261004d',
         scope: '/personal/familia/',
         icons: [
           { src: 'icons/pwa-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },

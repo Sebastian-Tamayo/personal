@@ -110,7 +110,8 @@ export const useOrgStore = create<OrgState>((set, get) => ({
     const optimistic: OrgItem = {
       id: tempId,
       title: input.title.trim(),
-      notes: input.notes.trim(),
+      // Keep internal newlines; only trim edges (notes may be multi-line schedules).
+      notes: input.notes.replace(/^\s+|\s+$/g, ''),
       kind: input.kind,
       status: 'pendiente',
       assignee: input.assignee,
@@ -153,7 +154,7 @@ export const useOrgStore = create<OrgState>((set, get) => ({
     const next = {
       ...prev,
       title: input.title.trim(),
-      notes: input.notes.trim(),
+      notes: input.notes.replace(/^\s+|\s+$/g, ''),
       kind: input.kind,
       assignee: input.assignee,
       date: input.date,

@@ -714,7 +714,9 @@ export function HomePage() {
                         ) : null}
                       </div>
                       {item.notes ? (
-                        <p className="mt-0.5 text-sm text-[var(--ink-soft)]">{item.notes}</p>
+                        <p className="mt-0.5 whitespace-pre-wrap break-words text-sm text-[var(--ink-soft)]">
+                          {item.notes}
+                        </p>
                       ) : null}
                     </div>
                     <div className="flex gap-1">
@@ -1099,7 +1101,11 @@ function ItemRow({
             )}
           </span>
         </div>
-        {item.notes ? <p className="mt-0.5 text-sm text-[var(--ink-soft)]">{item.notes}</p> : null}
+        {item.notes ? (
+          <p className="mt-0.5 whitespace-pre-wrap break-words text-sm text-[var(--ink-soft)]">
+            {item.notes}
+          </p>
+        ) : null}
         <p className="mt-1 text-xs font-bold" style={{ color }}>
           {item.date ? formatDateLabel(item.date) : 'Sin fecha'}
           {item.time ? ` · ${item.time}` : ''}

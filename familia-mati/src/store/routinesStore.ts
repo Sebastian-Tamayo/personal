@@ -135,7 +135,8 @@ export const useRoutinesStore = create<RoutinesState>((set, get) => ({
     const optimistic: FamiliaRoutine = {
       id: tempId,
       title: input.title.trim(),
-      notes: input.notes.trim(),
+      // Keep internal newlines; only trim edges.
+      notes: input.notes.replace(/^\s+|\s+$/g, ''),
       cadence: input.cadence,
       active: true,
       createdAt: now,
@@ -172,7 +173,7 @@ export const useRoutinesStore = create<RoutinesState>((set, get) => ({
     const next: FamiliaRoutine = {
       ...prev,
       title: input.title.trim(),
-      notes: input.notes.trim(),
+      notes: input.notes.replace(/^\s+|\s+$/g, ''),
       cadence: input.cadence,
       active: input.active,
       updatedAt: now,
