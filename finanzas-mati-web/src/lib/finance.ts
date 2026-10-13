@@ -18,6 +18,8 @@ export interface Expense {
   id: string
   name: string
   amount: number
+  /** Mes contable YYYY-MM — totales/listado solo usan el mes seleccionado */
+  monthId: string
   createdAt: number
   updatedAt: number
   createdBy: string
@@ -71,6 +73,38 @@ export function buildMonthOptions(
     out.sort((a, b) => (a < b ? 1 : a > b ? -1 : 0))
   }
   return out
+}
+
+/** Mes del gasto: campo explícito, o legacy → mes de createdAt. */
+export function resolveExpenseMonthId(
+  data: { monthId?: unknown; createdAt?: unknown },
+  fallback = currentMonthId(),
+): string {
+  const raw = typeof data.monthId === 'string' ? data.monthId.trim() : ''
+  if (/^\d{4}-\d{2}$/.test(raw)) return raw
+  const created = Number(data.createdAt)
+  if (Number.isFinite(created) && created > 0) return currentMonthId(new Date(created))
+  return fallback
+}
+
+export function parseExpense(id: string, data: Record<string, unknown>): Expense {
+  return {
+    id,
+    name: String(data.name ?? ''),
+    amount: Number(data.amount) || 0,
+    monthId: resolveExpenseMonthId(data),
+    createdAt: Number(data.createdAt) || 0,
+    updatedAt: Number(data.updatedAt) || 0,
+    createdBy: String(data.createdBy || ''),
+  }
+}
+
+/** Solo gastos del mes abierto — base de TOTAL compartido y aporte. */
+export function expensesForMonth(
+  expenses: Expense[],
+  monthId: string,
+): Expense[] {
+  return expenses.filter((e) => e.monthId === monthId)
 }
 
 export function sharedTotal(expenses: Pick<Expense, 'amount'>[]): number {

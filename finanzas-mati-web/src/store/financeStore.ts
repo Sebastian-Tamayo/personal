@@ -19,6 +19,8 @@ import {
   DEFAULT_SHARED_EXPENSES,
   contributionPerPerson,
   currentMonthId,
+  expensesForMonth,
+  parseExpense,
   parseMonthRecord,
   sharedTotal,
   type Expense,
@@ -28,6 +30,7 @@ import {
 import { getDb } from '../lib/firebase'
 
 interface FinanceState {
+  /** Gastos del mes seleccionado (únicos que entran en totales) */
   expenses: Expense[]
   month: MonthRecord | null
   monthId: string
@@ -51,6 +54,10 @@ interface FinanceState {
 let expensesUnsub: Unsubscribe | null = null
 let monthUnsub: Unsubscribe | null = null
 let seedingInFlight = false
+/** Caché completa para filtrar al cambiar de mes sin re-fetch */
+let allExpensesCache: Expense[] = []
+/** Evita reescribir monthId legacy en bucle */
+const monthIdBackfillDone = new Set<string>()
 
 function defaultMonth(id: string, uid = ''): MonthRecord {
   return {
@@ -61,6 +68,17 @@ function defaultMonth(id: string, uid = ''): MonthRecord {
     updatedAt: Date.now(),
     updatedBy: uid,
   }
+}
+
+function publishMonthExpenses(
+  monthId: string,
+  set: (partial: Partial<FinanceState>) => void,
+  extra?: Partial<FinanceState>,
+) {
+  set({
+    expenses: expensesForMonth(allExpensesCache, monthId),
+    ...extra,
+  })
 }
 
 function bindMonthSnapshot(monthId: string, set: (partial: Partial<FinanceState>) => void) {
@@ -82,6 +100,26 @@ function bindMonthSnapshot(monthId: string, set: (partial: Partial<FinanceState>
   )
 }
 
+async function backfillMissingMonthIds(expenses: Expense[]): Promise<void> {
+  const db = getDb()
+  const pending = expenses.filter((e) => !monthIdBackfillDone.has(e.id) && !e.id.startsWith('local-'))
+  if (pending.length === 0) return
+
+  // Solo docs que en Firestore aún no tienen monthId (detectados al parsear desde raw)
+  // Aquí reescribimos siempre el monthId resuelto una vez por id.
+  const chunk = pending.slice(0, 40)
+  await Promise.all(
+    chunk.map(async (e) => {
+      monthIdBackfillDone.add(e.id)
+      try {
+        await updateDoc(doc(db, 'expenses', e.id), { monthId: e.monthId })
+      } catch {
+        monthIdBackfillDone.delete(e.id)
+      }
+    }),
+  )
+}
+
 async function seedDefaultsIfEmpty(uid: string): Promise<void> {
   if (seedingInFlight) return
   seedingInFlight = true
@@ -92,17 +130,19 @@ async function seedDefaultsIfEmpty(uid: string): Promise<void> {
 
     const batch = writeBatch(db)
     const now = Date.now()
+    const monthId = currentMonthId()
     for (const item of DEFAULT_SHARED_EXPENSES) {
       const ref = doc(collection(db, 'expenses'))
       batch.set(ref, {
         name: item.name,
         amount: item.amount,
+        monthId,
         createdAt: now,
         updatedAt: now,
         createdBy: uid,
       })
     }
-    const monthRef = doc(db, 'months', currentMonthId())
+    const monthRef = doc(db, 'months', monthId)
     batch.set(
       monthRef,
       {
@@ -144,13 +184,15 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
 
   setMonthId: (monthId) => {
     set({ monthId, month: defaultMonth(monthId) })
+    publishMonthExpenses(monthId, set)
     bindMonthSnapshot(monthId, set)
   },
 
   subscribe: (uid: string) => {
     expensesUnsub?.()
     monthUnsub?.()
-    set({ loading: true, syncError: null, hydrated: false })
+    allExpensesCache = []
+    set({ loading: true, syncError: null, hydrated: false, expenses: [] })
 
     const db = getDb()
     const monthId = get().monthId
@@ -170,18 +212,22 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     expensesUnsub = onSnapshot(
       query(collection(db, 'expenses'), orderBy('createdAt', 'asc')),
       (snap) => {
-        const expenses: Expense[] = snap.docs.map((d) => {
-          const data = d.data()
-          return {
-            id: d.id,
-            name: String(data.name ?? ''),
-            amount: Number(data.amount) || 0,
-            createdAt: Number(data.createdAt) || 0,
-            updatedAt: Number(data.updatedAt) || 0,
-            createdBy: String(data.createdBy || ''),
-          }
+        const parsed: Expense[] = snap.docs.map((d) =>
+          parseExpense(d.id, d.data() as Record<string, unknown>),
+        )
+        allExpensesCache = parsed
+        publishMonthExpenses(get().monthId, set, { loading: false, hydrated: true })
+
+        // Persist monthId on legacy docs (once) so history stays per-month.
+        const needsBackfill = snap.docs.filter((d) => {
+          const raw = d.data().monthId
+          return typeof raw !== 'string' || !/^\d{4}-\d{2}$/.test(raw)
         })
-        set({ expenses, loading: false, hydrated: true })
+        if (needsBackfill.length > 0) {
+          void backfillMissingMonthIds(
+            needsBackfill.map((d) => parseExpense(d.id, d.data() as Record<string, unknown>)),
+          )
+        }
       },
       (err) => set({ syncError: err.message, loading: false }),
     )
@@ -193,75 +239,81 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
       monthUnsub?.()
       expensesUnsub = null
       monthUnsub = null
+      allExpensesCache = []
     }
   },
 
   addExpense: async (name, amount, uid) => {
+    const monthId = get().monthId
     const tempId = `local-${crypto.randomUUID()}`
     const now = Date.now()
     const optimistic: Expense = {
       id: tempId,
       name: name.trim(),
       amount,
+      monthId,
       createdAt: now,
       updatedAt: now,
       createdBy: uid,
     }
-    set((s) => ({ expenses: [...s.expenses, optimistic], syncError: null }))
+    allExpensesCache = [...allExpensesCache, optimistic]
+    publishMonthExpenses(monthId, set, { syncError: null })
     try {
       const ref = await addDoc(collection(getDb(), 'expenses'), {
         name: optimistic.name,
         amount: optimistic.amount,
+        monthId,
         createdAt: now,
         updatedAt: now,
         createdBy: uid,
         _server: serverTimestamp(),
       })
-      set((s) => ({
-        expenses: s.expenses.map((e) => (e.id === tempId ? { ...e, id: ref.id } : e)),
-      }))
+      allExpensesCache = allExpensesCache.map((e) =>
+        e.id === tempId ? { ...e, id: ref.id } : e,
+      )
+      publishMonthExpenses(get().monthId, set)
     } catch (err) {
-      set((s) => ({
-        expenses: s.expenses.filter((e) => e.id !== tempId),
+      allExpensesCache = allExpensesCache.filter((e) => e.id !== tempId)
+      publishMonthExpenses(get().monthId, set, {
         syncError: err instanceof Error ? err.message : 'No se pudo guardar el gasto',
-      }))
+      })
       throw err
     }
   },
 
   updateExpense: async (id, name, amount) => {
-    const prev = get().expenses.find((e) => e.id === id)
+    const prev = allExpensesCache.find((e) => e.id === id)
     if (!prev) return
     const now = Date.now()
-    set((s) => ({
-      expenses: s.expenses.map((e) =>
-        e.id === id ? { ...e, name: name.trim(), amount, updatedAt: now } : e,
-      ),
-      syncError: null,
-    }))
+    allExpensesCache = allExpensesCache.map((e) =>
+      e.id === id ? { ...e, name: name.trim(), amount, updatedAt: now } : e,
+    )
+    publishMonthExpenses(get().monthId, set, { syncError: null })
     try {
       await updateDoc(doc(getDb(), 'expenses', id), {
         name: name.trim(),
         amount,
         updatedAt: now,
+        monthId: prev.monthId,
       })
     } catch (err) {
-      set((s) => ({
-        expenses: s.expenses.map((e) => (e.id === id ? prev : e)),
+      allExpensesCache = allExpensesCache.map((e) => (e.id === id ? prev : e))
+      publishMonthExpenses(get().monthId, set, {
         syncError: err instanceof Error ? err.message : 'No se pudo actualizar el gasto',
-      }))
+      })
       throw err
     }
   },
 
   deleteExpense: async (id) => {
-    const prev = get().expenses
-    set({ expenses: prev.filter((e) => e.id !== id), syncError: null })
+    const prev = allExpensesCache
+    allExpensesCache = prev.filter((e) => e.id !== id)
+    publishMonthExpenses(get().monthId, set, { syncError: null })
     try {
       await deleteDoc(doc(getDb(), 'expenses', id))
     } catch (err) {
-      set({
-        expenses: prev,
+      allExpensesCache = prev
+      publishMonthExpenses(get().monthId, set, {
         syncError: err instanceof Error ? err.message : 'No se pudo eliminar el gasto',
       })
       throw err
@@ -300,7 +352,10 @@ export const useFinanceStore = create<FinanceState>((set, get) => ({
     const monthId = get().monthId
     const prev = get().month
     const now = Date.now()
-    const amount = Number.isFinite(savingsAmount) && savingsAmount >= 0 ? savingsAmount : DEFAULT_SAVINGS_PER_PERSON
+    const amount =
+      Number.isFinite(savingsAmount) && savingsAmount >= 0
+        ? savingsAmount
+        : DEFAULT_SAVINGS_PER_PERSON
     const base = prev ?? defaultMonth(monthId, uid)
     const next: MonthRecord = {
       ...base,

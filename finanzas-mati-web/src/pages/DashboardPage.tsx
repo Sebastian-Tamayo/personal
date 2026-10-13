@@ -49,6 +49,13 @@ export function DashboardPage() {
     setSavingsDraft(String(savingsAmount))
   }, [savingsAmount, monthId])
 
+  useEffect(() => {
+    setEditing(null)
+    setName('')
+    setAmount('')
+  }, [monthId])
+
+  // Totales solo del mes abierto (expenses ya filtrados en el store).
   const shared = useMemo(() => sharedTotal(expenses), [expenses])
   const contribution = useMemo(
     () => contributionPerPerson(expenses, { includeSavings, savingsAmount }),
@@ -222,7 +229,11 @@ export function DashboardPage() {
         <div
           className={`grid grid-cols-1 gap-3 ${includeSavings ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}
         >
-          <Stat label="Total compartido" value={formatMoney(shared)} />
+          <Stat
+            label="Total compartido"
+            value={formatMoney(shared)}
+            hint="Solo este mes"
+          />
           {includeSavings ? (
             <Stat
               label="Ahorro c/u"
@@ -241,7 +252,7 @@ export function DashboardPage() {
 
       <section className="animate-rise-delay rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-4 shadow-[var(--shadow)] backdrop-blur sm:p-5">
         <h2 className="mb-3 text-lg font-semibold">
-          {editing ? 'Editar gasto' : 'Gastos compartidos'}
+          {editing ? 'Editar gasto' : 'Gastos del mes'}
         </h2>
 
         <form onSubmit={onSubmit} className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-[1fr_7rem_auto]">
@@ -290,7 +301,9 @@ export function DashboardPage() {
             {seeding ? 'Sembrando gastos por defecto…' : 'Cargando gastos…'}
           </p>
         ) : expenses.length === 0 ? (
-          <p className="text-sm text-[var(--ink-soft)]">No hay gastos. Añade el primero.</p>
+          <p className="text-sm text-[var(--ink-soft)]">
+            No hay gastos en {formatMonthLabel(monthId)}. Añade el primero de este mes.
+          </p>
         ) : (
           <ul className="divide-y divide-[var(--line)]">
             {expenses.map((expense) => (
@@ -332,7 +345,8 @@ export function DashboardPage() {
       <InstallHint />
 
       <p className="animate-rise-delay-2 text-center text-xs text-[var(--ink-soft)]">
-        Los totales se actualizan al instante; Firestore solo sincroniza en segundo plano.
+        Totales solo del mes seleccionado. Se actualizan al instante; Firestore sincroniza en
+        segundo plano.
       </p>
     </AppShell>
   )

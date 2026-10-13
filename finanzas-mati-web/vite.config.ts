@@ -4,9 +4,9 @@ import { defineConfig, type Plugin } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
 // GitHub Pages project site: https://Sebastian-Tamayo.github.io/personal/
-// Cache-bust bump: Actualizar overlay for PWA updates
-export const FINANZAS_BUILD_ID = 'actualizar-overlay-v20261013b'
-export const FINANZAS_PWA_CACHE_ID = 'finanzas-mati-v20261013b'
+// Cache-bust bump: per-month expense totals
+export const FINANZAS_BUILD_ID = 'suma-mes-v20261013c'
+export const FINANZAS_PWA_CACHE_ID = 'finanzas-mati-v20261013c'
 
 function finanzasVersionJson(): Plugin {
   return {
@@ -46,7 +46,7 @@ export default defineConfig({
         display: 'standalone',
         orientation: 'portrait-primary',
         lang: 'es',
-        start_url: '/personal/?v=20261013b',
+        start_url: '/personal/?v=20261013c',
         scope: '/personal/',
         icons: [
           {
