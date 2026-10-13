@@ -46,6 +46,33 @@ export function formatMonthLabel(monthId: string): string {
   return date.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })
 }
 
+/**
+ * Meses seleccionables: años completos alrededor del actual
+ * (por defecto año anterior → año siguiente), más el mes activo si queda fuera.
+ * Orden: más reciente primero. Sin tope en meses futuros.
+ */
+export function buildMonthOptions(
+  now = new Date(),
+  opts?: { pastYears?: number; futureYears?: number; ensure?: string },
+): string[] {
+  const pastYears = opts?.pastYears ?? 1
+  const futureYears = opts?.futureYears ?? 1
+  const y0 = now.getFullYear() - pastYears
+  const y1 = now.getFullYear() + futureYears
+  const out: string[] = []
+  for (let y = y1; y >= y0; y--) {
+    for (let m = 12; m >= 1; m--) {
+      out.push(`${y}-${String(m).padStart(2, '0')}`)
+    }
+  }
+  const ensure = opts?.ensure
+  if (ensure && /^\d{4}-\d{2}$/.test(ensure) && !out.includes(ensure)) {
+    out.push(ensure)
+    out.sort((a, b) => (a < b ? 1 : a > b ? -1 : 0))
+  }
+  return out
+}
+
 export function sharedTotal(expenses: Pick<Expense, 'amount'>[]): number {
   return expenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0)
 }

@@ -5,8 +5,8 @@ import { InstallHint } from '../components/InstallHint'
 import { TasksSection } from '../components/TasksSection'
 import {
   DEFAULT_SAVINGS_PER_PERSON,
+  buildMonthOptions,
   contributionPerPerson,
-  currentMonthId,
   formatMoney,
   formatMonthLabel,
   sharedTotal,
@@ -15,16 +15,6 @@ import {
 } from '../lib/finance'
 import { useAuthStore } from '../store/authStore'
 import { useFinanceStore } from '../store/financeStore'
-
-function monthOptions(count = 6): string[] {
-  const out: string[] = []
-  const now = new Date()
-  for (let i = 0; i < count; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
-    out.push(currentMonthId(d))
-  }
-  return out
-}
 
 export function DashboardPage() {
   const user = useAuthStore((s) => s.user)!
@@ -65,7 +55,7 @@ export function DashboardPage() {
     [expenses, includeSavings, savingsAmount],
   )
   const status: MonthStatus = month?.status ?? 'pendiente'
-  const months = useMemo(() => monthOptions(8), [])
+  const months = useMemo(() => buildMonthOptions(new Date(), { ensure: monthId }), [monthId])
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
